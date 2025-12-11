@@ -1,0 +1,102 @@
+--- Debugging RAG Content for Grade 7 English ---
+
+1. Searching for 'Road Safety'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: The problem may grow further in the coming decades due to the rapid rise of vehicle ownership 
+assoc...
+  Result 2: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+38
+ROAD SAFETY
+evidence as to their effectiveness in reducing crashes, ...
+  Result 3: Chapter ? - English grade 7.pdf
+  Snippet: while behind the wheel, driving without using a seat belt and not using a motorcycle helmet) 
+and th...
+  Result 4: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+34
+ROAD SAFETY
+Nuhamin: Yes, it also makes many children orphans and ma...
+  Result 5: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+37
+ROAD SAFETY
+1. Look at the picture below. What is happening in the p...
+
+2. Searching for 'Talking about Preferences'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: Kebede: Thank you!
+Activity 1.6: Discuss in groups why people prefer or do not prefer to live in the...
+  Result 2: Chapter 14 - English grade 7.pdf
+  Snippet: suggest someone I know. I eat all kinds of vegetarian and non-vegetarian food because I am a very 
+f...
+  Result 3: Chapter ? - English grade 7.pdf
+  Snippet: D)  I need a few items at the store. Clothespins, a bottle opener and napkins.
+4. A)       The party...
+  Result 4: Chapter 2 - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+123
+SELF-EXPRESSIONS
+LESSON 2
+Post-listening
+Activity 9.4: Answer the f...
+  Result 5: Chapter 12 - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+132
+SELF-EXPRESSIONS
+Activity 9.17: Write a paragraph that describes on...
+
+5. Testing Semantic Search for 'UNIT THREE'...
+  Result 1: Chapter 9 - Title: ?
+  Snippet: 122
+UNIT NINE: SELF-EXPRESSIONS .......................................................................
+  Result 2: Chapter 10 - Title: ?
+  Snippet: Unit 10 Computer Development Grade 7
+147
+Activity 10.31: Edit the following paragraph using comma or...
+  Result 3: Chapter 5 - Title: ?
+  Snippet: 55
+UNIT FIVE: DAIRY ...................................................................................
+  Result 4: Chapter 7 - Title: ?
+  Snippet: English Grade 7 Student Book
+89
+VOLUNTEERISM
+UNIT SEVEN 
+VOLUNTEERISM
+UNIT OBJECTIVES: At the end of...
+  Result 5: Chapter 1 - Title: ?
+  Snippet: 7. Finally, do not forget  to edit the language of your paragraph to avoid grammar, 
+meaning, spelli...
+
+6. Testing Semantic Search for 'Grade 7 English Unit 3'...
+  Result 1: Chapter 7 - Title: ?
+  Snippet: English Grade 7 Student Book
+89
+VOLUNTEERISM
+UNIT SEVEN 
+VOLUNTEERISM
+UNIT OBJECTIVES: At the end of...
+  Result 2: Chapter 6 - Title: ?
+  Snippet: English Grade 7 Student Book
+73
+LAND CONSERVATION 
+UNIT SIX
+LAND CONSERVATION
+UNIT OBJECTIVES: At th...
+  Result 3: Chapter ? - Title: ?
+  Snippet: English Grade 7 Student Book
+69
+DAIRY
+                     Sample Paragraph Outline 
+Topic:Temesgen ...
+  Result 4: Chapter ? - Title: ?
+  Snippet: 3. The rook was covered in soot.
+4. The fish hook caught in her foot.
+5. He shook the box of books.
+...
+  Result 5: Chapter 11 - Title: ?
+  Snippet: English Grade 7 Student Book
+41
+ROAD SAFETY
+LESSON 11
+Activity 3.17: Change the verbs in brackets in...

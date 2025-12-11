@@ -1,0 +1,274 @@
+import React, { useState, useEffect } from 'react';
+import { ChildSummary, User, Course } from '../../types';
+import AtAGlance from '../parent/AtAGlance';
+import CommunicationLog from '../parent/CommunicationLog';
+import AIPolicy from '../parent/AIPolicy';
+import ParentEnrolledSubjects from '../parent/ParentEnrolledSubjects';
+import ChildSelectorDropdown from '../parent/ChildSelectorDropdown';
+import EnhancedStudentSelector from '../common/EnhancedStudentSelector';
+import { ChartBarIcon, ChatBubbleLeftRightIcon, ShieldCheckIcon, BookOpenIcon, AcademicCapIcon } from '../icons/Icons';
+import { apiService } from '../../services/apiService';
+import eventService, { EVENTS } from '../../services/eventService';
+import LinkChild from '../parent/LinkChild';
+
+type Tab = 'glance' | 'grades' | 'communication' | 'policy' | 'enrolled-subjects';
+
+const ParentDashboard: React.FC = () => {
+    const [children, setChildren] = useState<ChildSummary[]>([]);
+    const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState<Tab>('glance');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [childGrades, setChildGrades] = useState<Course[]>([]);
+    const [gradesLoading, setGradesLoading] = useState(false);
+
+    const fetchChildren = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            let fetchedChildren: ChildSummary[] = [];
+            
+            try {
+                const linkedStudents = await apiService.getParentLinkedStudents();
+                fetchedChildren = linkedStudents.map((student: any) => ({
+                    id: student.id,
+                    name: student.name,
+                    grade: student.grade,
+                    overall_progress: 0,
+                    upcoming_assignments: [],
+                    recent_alerts_count: 0
+                }));
+            } catch (err) {
+                console.error('Could not fetch linked students, falling back to traditional parent-child relationship:', err);
+                fetchedChildren = await apiService.getMyChildren();
+            }
+            
+            setChildren(fetchedChildren);
+            if (fetchedChildren.length > 0) {
+                setSelectedChildId(fetchedChildren[0].id);
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load your children's data. Please try again later.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedChildId) {
+            fetchChildGrades(selectedChildId);
+        }
+    }, [selectedChildId]);
+
+    const fetchChildGrades = async (childId: number) => {
+        setGradesLoading(true);
+        try {
+            const grades = await apiService.getParentChildGrades(childId);
+            setChildGrades(grades);
+        } catch (err) {
+            console.error('Failed to fetch child grades:', err);
+            setChildGrades([]);
+        } finally {
+            setGradesLoading(false);
+        }
+    };
+
+    // Listen for grade updates
+    useEffect(() => {
+        const unsubscribe = eventService.subscribe(EVENTS.GRADE_UPDATED, () => {
+            if (selectedChildId) {
+                fetchChildGrades(selectedChildId);
+            }
+        });
+        return unsubscribe;
+    }, [selectedChildId]);
+
+    useEffect(() => {
+        fetchChildren();
+    }, []);
+
+    const selectedChild = children.find(c => c.id === selectedChildId);
+
+    const tabs = [
+        { id: 'glance', label: 'At-a-Glance Status', icon: <ChartBarIcon /> },
+        { id: 'grades', label: 'Courses & Grades', icon: <BookOpenIcon /> },
+        { id: 'enrolled-subjects', label: 'Enrolled Subjects', icon: <AcademicCapIcon /> },
+        { id: 'communication', label: 'Communication Log', icon: <ChatBubbleLeftRightIcon /> },
+        { id: 'policy', label: 'AI Use Policy', icon: <ShieldCheckIcon /> },
+    ];
+
+    const renderGradesTab = () => {
+        if (gradesLoading) {
+            return <p className="text-center text-gray-500">Loading grades...</p>;
+        }
+
+        if (childGrades.length === 0) {
+            return <p className="text-center text-gray-500">No course grades available yet.</p>;
+        }
+
+        return (
+            <div className="space-y-6">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-600 rounded-lg p-6 mb-6">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        Performance Overview for {selectedChild?.name}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        View course grades and detailed performance metrics
+                    </p>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div className="space-y-6">
+                        {childGrades.map((course) => (
+                            <div key={course.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{course.title}</h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">Instructor: {course.teacher_name || 'Unknown'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-3xl font-bold text-primary dark:text-secondary">
+                                            {course.overall_grade !== null && course.overall_grade !== undefined 
+                                                ? (typeof course.overall_grade === 'number' 
+                                                    ? course.overall_grade.toFixed(1) 
+                                                    : parseFloat(String(course.overall_grade)).toFixed(1))
+                                                : 'N/A'}
+                                        </p>
+                                        <p className="text-xs text-gray-500">Overall Grade</p>
+                                    </div>
+                                </div>
+
+                                {course.units && course.units.length > 0 && (
+                                    <div className="mt-6 space-y-4">
+                                        <h4 className="font-medium text-gray-700 dark:text-gray-300">Units</h4>
+                                        {course.units.map((unit) => (
+                                            <div key={unit.id} className="bg-gray-50 dark:bg-gray-700 rounded p-4">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <h5 className="font-medium text-gray-800 dark:text-gray-200">{unit.title}</h5>
+                                                    <span className="text-sm font-semibold text-primary dark:text-secondary">
+                                                        {unit.unit_grade !== null && unit.unit_grade !== undefined
+                                                            ? (typeof unit.unit_grade === 'number'
+                                                                ? unit.unit_grade.toFixed(1)
+                                                                : parseFloat(String(unit.unit_grade)).toFixed(1))
+                                                            : 'N/A'}%
+                                                    </span>
+                                                </div>
+
+                                                {unit.items && unit.items.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        {unit.items.map((item) => (
+                                                            <div key={item.id} className="flex justify-between items-center text-sm">
+                                                                <span className="text-gray-600 dark:text-gray-400">{item.title}</span>
+                                                                <span className="font-semibold text-gray-900 dark:text-gray-100">{item.score}/{item.max_score}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+    
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'glance':
+                if (!selectedChild) return null;
+                return <AtAGlance child={selectedChild} />;
+            case 'grades':
+                if (!selectedChild) return null;
+                return renderGradesTab();
+            case 'enrolled-subjects':
+                return <ParentEnrolledSubjects selectedChildId={selectedChildId} />;
+            case 'communication':
+                return <CommunicationLog />;
+            case 'policy':
+                return <AIPolicy />;
+            default:
+                if (!selectedChild) return null;
+                return <AtAGlance child={selectedChild} />;
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <p>Loading your dashboard...</p>
+            </div>
+        );
+    }
+    
+    if (error) {
+        return <div className="p-4 text-center text-red-700 bg-red-100 rounded-md">{error}</div>;
+    }
+
+    if (children.length === 0) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">Parent/Guardian Dashboard</h1>
+                <LinkChild onChildLinked={fetchChildren} />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Parent/Guardian Dashboard</h1>
+
+            {/* Child Selector - Enhanced */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <EnhancedStudentSelector
+                    students={children.map(child => ({
+                        id: child.id,
+                        name: child.name,
+                        grade: child.grade,
+                        grade_level: child.grade
+                    }))}
+                    selectedStudentId={selectedChildId}
+                    onSelect={setSelectedChildId}
+                    label="Viewing Dashboard For"
+                    placeholder="Select a student to view their dashboard..."
+                />
+                {selectedChild && (
+                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                            Currently viewing <span className="font-semibold">{selectedChild.name}'s</span> dashboard
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as Tab)}
+                        className={`flex-shrink-0 flex items-center space-x-2 px-4 py-3 -mb-px text-sm font-medium focus:outline-none transition-colors
+                        ${activeTab === tab.id
+                            ? 'border-b-2 border-primary text-primary dark:text-secondary dark:border-secondary'
+                            : 'border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        {tab.icon}
+                        <span>{tab.label}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Content */}
+            <div>
+                {renderContent()}
+            </div>
+        </div>
+    );
+};
+
+export default ParentDashboard;

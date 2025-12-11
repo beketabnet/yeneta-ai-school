@@ -1,0 +1,67 @@
+1534: const getStudentGradebook = async (subject?: string): Promise<any[]> => {
+1535:     try {
+1536:         const params = new URLSearchParams();
+1537:         if (subject) params.append('subject', subject);
+1538:         const queryString = params.toString();
+1539:         const url = queryString ? `/academics/student-gradebook/?${queryString}` : '/academics/student-gradebook/';
+1540:         const { data } = await api.get(url);
+1541:         return data;
+1542:     } catch (error) {
+1543:         console.error('Error fetching student gradebook:', error);
+1544:         throw error;
+1545:     }
+1546: };
+1547: 
+1548: const createStudentGrade = async (gradeData: any): Promise<any> => {
+1549:     try {
+1550:         const { data } = await api.post('/academics/student-grades/', gradeData);
+1551:         return data;
+1552:     } catch (error) {
+1553:         console.error('Error creating student grade:', error);
+1554:         throw error;
+1555:     }
+1556: };
+1557: 
+1558: const updateStudentGrade = async (gradeId: number, gradeData: any): Promise<any> => {
+1559:     try {
+1560:         const { data } = await api.put(`/academics/student-grades/${gradeId}/`, gradeData);
+1561:         return data;
+1562:     } catch (error) {
+1563:         console.error('Error updating student grade:', error);
+1564:         throw error;
+1565:     }
+1566: };
+1567: 
+1568: const deleteStudentGrade = async (gradeId: number): Promise<void> => {
+1569:     try {
+1570:         await api.delete(`/academics/student-grades/${gradeId}/`);
+1571:     } catch (error) {
+1572:         console.error('Error deleting student grade:', error);
+1573:         throw error;
+1574:     }
+1575: };
+1576: 
+1577: const calculateOverallGrade = async (studentId: number, subject: string): Promise<any> => {
+1578:     try {
+1579:         const params = new URLSearchParams();
+1580:         params.append('student_id', studentId.toString());
+1581:         params.append('subject', subject);
+1582:         const { data } = await api.get(`/academics/student-grades/calculate_overall/?${params.toString()}`);
+1583:         return data;
+1584:     } catch (error) {
+1585:         console.error('Error calculating overall grade:', error);
+1586:         throw error;
+1587:     }
+1588: };
+1589: 
+1590: const getStudentGradesBySubject = async (subject: string, studentId?: number, assignmentType?: string, examType?: string): Promise<any[]> => {
+1591:     try {
+1592:         const params = new URLSearchParams();
+1593:         params.append('subject', subject);
+1594:         if (studentId) params.append('student_id', studentId.toString());
+1595:         if (assignmentType) params.append('assignment_type', assignmentType);
+1596:         if (examType) params.append('exam_type', examType);
+1597:         const { data } = await api.get(`/academics/student-grades/by_subject/?${params.toString()}`);
+1598:         return data;
+1599:     } catch (error) {
+1600:         console.error('Error fetching student grades by subject:', error);

@@ -1,0 +1,52 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - button "Go back to landing page" [ref=e6] [cursor=pointer]:
+      - img [ref=e7]
+      - generic [ref=e9]: Back to Home
+    - button "Toggle dark mode" [ref=e10] [cursor=pointer]:
+      - img [ref=e11]
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16] [cursor=pointer]:
+        - img [ref=e17]:
+          - generic [ref=e19]: የኔታ
+        - generic [ref=e20]: YENETA
+      - heading "Log in to your account" [level=2] [ref=e21]
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - paragraph [ref=e24]: No active account found with the given credentials
+        - generic [ref=e25]:
+          - generic [ref=e26]: Email address
+          - textbox "Email address" [ref=e28]: student@yeneta.com
+        - generic [ref=e29]:
+          - generic [ref=e30]: Password
+          - generic [ref=e31]:
+            - textbox "Password" [ref=e32]: student123
+            - button "Show password" [ref=e33] [cursor=pointer]:
+              - img [ref=e34]
+        - generic [ref=e37]:
+          - generic [ref=e38]: Log in as (demo)
+          - combobox "Log in as (demo)" [ref=e39]:
+            - option "Admin"
+            - option "Teacher"
+            - option "Student" [selected]
+            - option "Parent"
+          - paragraph [ref=e40]: "Note: In a real system, your role is assigned by an administrator."
+        - button "Forgot your password?" [ref=e43] [cursor=pointer]
+        - button "Log in" [ref=e45] [cursor=pointer]
+      - paragraph [ref=e46]:
+        - text: Don't have an account?
+        - button "Sign up" [ref=e47] [cursor=pointer]
+  - contentinfo [ref=e48]:
+    - generic [ref=e49]:
+      - paragraph [ref=e50]: © 2025 YENETA-Ethiopia. All Rights Reserved.
+      - generic [ref=e51]:
+        - button "Home" [ref=e52] [cursor=pointer]
+        - text: ·
+        - button "Privacy Policy" [ref=e53] [cursor=pointer]
+        - text: ·
+        - button "Terms of Service" [ref=e54] [cursor=pointer]
+```

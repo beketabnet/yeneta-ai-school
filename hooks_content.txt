@@ -1,0 +1,423 @@
+
+============================================================
+FILE: hooks/useTeacherEnrolledStudents.ts
+============================================================
+import { useState, useEffect, useCallback } from 'react';
+import { apiService } from '../services/apiService';
+
+export interface EnrolledStudent {
+  id: number;
+  student_id?: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  student_name?: string;
+  email?: string;
+  grade_level?: string;
+  stream?: string;
+  subjects?: EnrolledSubject[];
+  courses?: EnrolledCourse[];
+}
+
+export interface EnrolledSubject {
+  id?: number;
+  subject: string;
+  grade_level: string;
+  stream?: string;
+}
+
+export interface EnrolledCourse {
+  subject: string;
+  grade_level: string;
+  stream?: string;
+}
+
+export interface UseTeacherEnrolledStudentsReturn {
+  students: EnrolledStudent[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export const useTeacherEnrolledStudents = (): UseTeacherEnrolledStudentsReturn => {
+  const [students, setStudents] = useState<EnrolledStudent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStudents = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await apiService.get('/academics/teacher-enrolled-students/');
+      const rawData = Array.isArray(response) ? response : response.data || [];
+      
+      // Transform backend response to match component expectations
+      const transformedData: EnrolledStudent[] = rawData.map((student: any) => {
+        const firstName = student.first_name || '';
+        const lastName = student.last_name || '';
+        const studentName = `${firstName} ${lastName}`.trim() || student.username || 'Unknown Student';
+        const gradeLevel = (student.courses && student.courses.length > 0) 
+          ? student.courses[0].grade_level 
+          : 'N/A';
+        
+        return {
+          id: student.id,
+          student_id: student.id,
+          username: student.username,
+          first_name: firstName,
+          last_name: lastName,
+          student_name: studentName,
+          email: student.email,
+          grade_level: gradeLevel,
+          subjects: (student.courses || []).map((course: EnrolledCourse) => ({
+            id: Math.random(), // Generate temporary ID
+            subject: course.subject,
+            grade_level: course.grade_level,
+            stream: course.stream,
+          })),
+          courses: student.courses || [],
+        };
+      });
+      
+      console.log('Transformed students data:', transformedData);
+      setStudents(transformedData);
+    } catch (err) {
+      console.error('Error fetching enrolled students:', err);
+      setError('Failed to load enrolled students');
+      setStudents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  return {
+    students,
+    isLoading,
+    error,
+    refetch: fetchStudents
+  };
+};
+
+
+============================================================
+FILE: hooks/useTeacherGradebook.ts
+============================================================
+import { useState, useEffect, useCallback } from 'react';
+import { apiService } from '../services/apiService';
+
+export interface GradebookAssignment {
+    id: number;
+    topic: string;
+    type: string;
+    score: number | null;
+    max_score: number;
+    submitted_at?: string;
+    is_graded: boolean;
+}
+
+export interface GradebookEntry {
+    student_id: number;
+    student_name: string;
+    subject: string;
+    grade_level: string;
+    stream?: string;
+    assignments: GradebookAssignment[];
+}
+
+interface UseTeacherGradebookReturn {
+    gradebook: GradebookEntry[];
+    isLoading: boolean;
+    error: string | null;
+    refetch: () => Promise<void>;
+}
+
+export const useTeacherGradebook = (): UseTeacherGradebookReturn => {
+    const [gradebook, setGradebook] = useState<GradebookEntry[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchGradebook = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await apiService.getTeacherGradebook();
+            setGradebook(Array.isArray(data) ? data : []);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to fetch gradebook';
+            setError(errorMessage);
+            console.error('Error fetching teacher gradebook:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchGradebook();
+    }, [fetchGradebook]);
+
+    return {
+        gradebook,
+        isLoading,
+        error,
+        refetch: fetchGradebook
+    };
+};
+
+
+============================================================
+FILE: hooks/useTeacherSubjectGrades.ts
+============================================================
+import { useState, useCallback, useEffect } from 'react';
+import { apiService } from '../services/apiService';
+import eventService, { EVENTS } from '../services/eventService';
+
+export interface SubjectInfo {
+  id: number;
+  title: string;
+  grade_level: string;
+  student_count: number;
+  total_grades: number;
+  avg_score: number | null;
+}
+
+export interface StudentWithGrades {
+  student_id: number;
+  student_name: string;
+  grade_level: string;
+  enrollment_date: string;
+  grades: any[];
+  assignment_grades: any[];
+  exam_grades: any[];
+  total_grades: number;
+}
+
+export interface SubjectGradesData {
+  subject_id: number;
+  subject_name: string;
+  grade_level: string;
+  students: StudentWithGrades[];
+  total_students: number;
+}
+
+export interface UseTeacherSubjectGradesReturn {
+  subjects: SubjectInfo[];
+  selectedSubjectData: SubjectGradesData | null;
+  summary: any;
+  isLoading: boolean;
+  error: string | null;
+  selectSubject: (subjectId: number) => Promise<void>;
+  refetchSubjects: () => Promise<void>;
+  refetchSubjectData: () => Promise<void>;
+  submitBulkGrades: (gradesData: any[]) => Promise<any>;
+}
+
+export const useTeacherSubjectGrades = (): UseTeacherSubjectGradesReturn => {
+  const [subjects, setSubjects] = useState<SubjectInfo[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
+  const [selectedSubjectData, setSelectedSubjectData] = useState<SubjectGradesData | null>(null);
+  const [summary, setSummary] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetchSubjects = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await apiService.getTeacherEnrolledSubjects();
+      setSubjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch subjects';
+      setError(errorMessage);
+      console.error('Error fetching subjects:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const refetchSubjectData = useCallback(async () => {
+    if (!selectedSubjectId) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [subjectData, summaryData] = await Promise.all([
+        apiService.getSubjectStudentsWithGrades(selectedSubjectId),
+        apiService.getSubjectGradeSummary(selectedSubjectId)
+      ]);
+      setSelectedSubjectData(subjectData);
+      setSummary(summaryData);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch subject data';
+      setError(errorMessage);
+      console.error('Error fetching subject data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedSubjectId]);
+
+  const selectSubject = useCallback(async (subjectId: number) => {
+    setSelectedSubjectId(subjectId);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [subjectData, summaryData] = await Promise.all([
+        apiService.getSubjectStudentsWithGrades(subjectId),
+        apiService.getSubjectGradeSummary(subjectId)
+      ]);
+      setSelectedSubjectData(subjectData);
+      setSummary(summaryData);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch subject data';
+      setError(errorMessage);
+      console.error('Error fetching subject data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const submitBulkGrades = useCallback(async (gradesData: any[]) => {
+    try {
+      const result = await apiService.bulkGradeEntry(gradesData);
+      if (result.created > 0) {
+        eventService.emit(EVENTS.GRADE_CREATED, { count: result.created });
+        await refetchSubjectData();
+      }
+      return result;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit grades';
+      setError(errorMessage);
+      throw err;
+    }
+  }, [refetchSubjectData]);
+
+  useEffect(() => {
+    refetchSubjects();
+  }, [refetchSubjects]);
+
+  useEffect(() => {
+    const unsubscribeCreated = eventService.subscribe(EVENTS.GRADE_CREATED, () => {
+      refetchSubjectData();
+      refetchSubjects();
+    });
+
+    const unsubscribeUpdated = eventService.subscribe(EVENTS.GRADE_UPDATED, () => {
+      refetchSubjectData();
+      refetchSubjects();
+    });
+
+    const unsubscribeDeleted = eventService.subscribe(EVENTS.GRADE_DELETED, () => {
+      refetchSubjectData();
+      refetchSubjects();
+    });
+
+    return () => {
+      unsubscribeCreated();
+      unsubscribeUpdated();
+      unsubscribeDeleted();
+    };
+  }, [refetchSubjectData, refetchSubjects]);
+
+  return {
+    subjects,
+    selectedSubjectData,
+    summary,
+    isLoading,
+    error,
+    selectSubject,
+    refetchSubjects,
+    refetchSubjectData,
+    submitBulkGrades
+  };
+};
+
+
+============================================================
+FILE: hooks/useAdminEnrollmentRequests.ts
+============================================================
+import { useState, useEffect, useCallback } from 'react';
+import { apiService } from '../services/apiService';
+
+export interface EnrollmentStudent {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+}
+
+export interface EnrollmentTeacher {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+}
+
+export interface EnrollmentRequest {
+    id: number;
+    student: EnrollmentStudent;
+    teacher: EnrollmentTeacher;
+    subject: string;
+    grade_level: string;
+    stream?: string;
+    status: 'pending' | 'approved' | 'declined' | 'under_review';
+    review_notes?: string;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface EnrollmentStats {
+    total: number;
+    pending: number;
+    approved: number;
+    declined: number;
+    under_review: number;
+}
+
+interface UseAdminEnrollmentRequestsReturn {
+    enrollments: EnrollmentRequest[];
+    stats: EnrollmentStats | null;
+    isLoading: boolean;
+    error: string | null;
+    refetch: (filters?: { status?: string; teacher_id?: number; student_id?: number; search?: string }) => Promise<void>;
+}
+
+export const useAdminEnrollmentRequests = (): UseAdminEnrollmentRequestsReturn => {
+    const [enrollments, setEnrollments] = useState<EnrollmentRequest[]>([]);
+    const [stats, setStats] = useState<EnrollmentStats | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchEnrollments = useCallback(async (filters?: { status?: string; teacher_id?: number; student_id?: number; search?: string }) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await apiService.getAdminEnrollmentRequests(filters);
+            setEnrollments(Array.isArray(data.enrollments) ? data.enrollments : []);
+            setStats(data.stats || null);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to fetch enrollment requests';
+            setError(errorMessage);
+            console.error('Error fetching admin enrollment requests:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchEnrollments();
+    }, [fetchEnrollments]);
+
+    return {
+        enrollments,
+        stats,
+        isLoading,
+        error,
+        refetch: fetchEnrollments
+    };
+};
+

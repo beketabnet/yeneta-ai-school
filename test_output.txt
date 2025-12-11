@@ -1,0 +1,100 @@
+   1: import { test, expect } from '@playwright/test';
+   2: 
+   3: const API_BASE_URL = 'http://localhost:8000/api';
+   4: 
+   5: interface User {
+   6:   email: string;
+   7:   username: string;
+   8:   password: string;
+   9:   role: 'Student' | 'Teacher' | 'Parent';
+  10: }
+  11: 
+  12: const testData = {
+  13:   student: {
+  14:     email: `student-${Date.now()}@test.com`,
+  15:     username: `student${Date.now()}`,
+  16:     password: 'testpass123456',
+  17:     role: 'Student' as const
+  18:   },
+  19:   teacher: {
+  20:     email: `teacher-${Date.now()}@test.com`,
+  21:     username: `teacher${Date.now()}`,
+  22:     password: 'testpass123456',
+  23:     role: 'Teacher' as const
+  24:   },
+  25:   parent: {
+  26:     email: `parent-${Date.now()}@test.com`,
+  27:     username: `parent${Date.now()}`,
+  28:     password: 'testpass123456',
+  29:     role: 'Parent' as const
+  30:   }
+  31: };
+  32: 
+  33: const credentials: { [key: string]: { token: string; id: number } } = {};
+  34: 
+  35: async function registerUser(user: User): Promise<{ token: string; id: number }> {
+  36:   const registerRes = await fetch(`${API_BASE_URL}/users/register/`, {
+  37:     method: 'POST',
+  38:     headers: { 'Content-Type': 'application/json' },
+  39:     body: JSON.stringify(user)
+  40:   });
+  41: 
+  42:   if (!registerRes.ok) {
+  43:     const error = await registerRes.text();
+  44:     throw new Error(`Register failed: ${registerRes.status} - ${error}`);
+  45:   }
+  46: 
+  47:   const loginRes = await fetch(`${API_BASE_URL}/users/token/`, {
+  48:     method: 'POST',
+  49:     headers: { 'Content-Type': 'application/json' },
+  50:     body: JSON.stringify({
+  51:       email: user.email,
+  52:       password: user.password
+  53:     })
+  54:   });
+  55: 
+  56:   if (!loginRes.ok) {
+  57:     const error = await loginRes.text();
+  58:     throw new Error(`Login failed: ${loginRes.status} - ${error}`);
+  59:   }
+  60: 
+  61:   const tokenData = await loginRes.json();
+  62: 
+  63:   const meRes = await fetch(`${API_BASE_URL}/users/me/`, {
+  64:     headers: { 'Authorization': `Bearer ${tokenData.access}` }
+  65:   });
+  66: 
+  67:   const userData = await meRes.json();
+  68: 
+  69:   return {
+  70:     token: tokenData.access,
+  71:     id: userData.id
+  72:   };
+  73: }
+  74: 
+  75: test.describe('Family-Based Course Enrollment API Tests', () => {
+  76:   let studentToken: string;
+  77:   let teacherToken: string;
+  78:   let parentToken: string;
+  79:   let studentId: number;
+  80:   let teacherId: number;
+  81:   let parentId: number;
+  82:   let familyId: number;
+  83: 
+  84:   test.beforeAll(async () => {
+  85:     const student = await registerUser(testData.student);
+  86:     studentToken = student.token;
+  87:     studentId = student.id;
+  88:     credentials['student'] = student;
+  89: 
+  90:     const teacher = await registerUser(testData.teacher);
+  91:     teacherToken = teacher.token;
+  92:     teacherId = teacher.id;
+  93:     credentials['teacher'] = teacher;
+  94: 
+  95:     const parent = await registerUser(testData.parent);
+  96:     parentToken = parent.token;
+  97:     parentId = parent.id;
+  98:     credentials['parent'] = parent;
+  99:   });
+ 100: 

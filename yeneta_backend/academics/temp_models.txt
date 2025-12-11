@@ -1,0 +1,324 @@
+from django.db import models
+from django.conf import settings
+
+
+class Assignment(models.Model):
+    """Model for assignments."""
+    
+    DOCUMENT_TYPES = [
+        ('essay', 'Essay / Written Assignment'),
+        ('examination', 'Examination'),
+        ('project', 'Project / Research Paper'),
+        ('group_work', 'Group Work / Collaboration'),
+        ('lab_report', 'Lab Report'),
+        ('presentation', 'Presentation'),
+        ('homework', 'Homework Assignment'),
+        ('quiz', 'Quiz / Short Answer'),
+        ('creative_writing', 'Creative Writing'),
+        ('critical_analysis', 'Critical Analysis'),
+    ]
+    
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    rubric = models.TextField(blank=True)
+    document_type = models.CharField(
+        max_length=50,
+        choices=DOCUMENT_TYPES,
+        default='essay',
+        help_text='Type of document for this assignment'
+    )
+    due_date = models.DateTimeField()
+    course = models.CharField(max_length=100, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_assignments'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'assignments'
+        ordering = ['-due_date']
+    
+    def __str__(self):
+        return self.title
+
+
+class Submission(models.Model):
+    """Model for assignment submissions."""
+    
+    assignment = models.ForeignKey(
+        Assignment,
+        on_delete=models.CASCADE,
+        related_name='submissions'
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='submissions'
+    )
+    submitted_text = models.TextField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    grade = models.FloatField(null=True, blank=True)
+    feedback = models.TextField(blank=True)
+    authenticity_score = models.FloatField(null=True, blank=True)
+    ai_likelihood = models.FloatField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'submissions'
+        ordering = ['-submitted_at']
+        unique_together = ['assignment', 'student']
+    
+    def __str__(self):
+        return f"{self.student.username} - {self.assignment.title}"
+
+
+class PracticeQuestion(models.Model):
+    """Model for practice questions."""
+    
+    subject = models.CharField(max_length=100)
+    topic = models.CharField(max_length=200)
+    question = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'practice_questions'
+        ordering = ['subject', 'topic']
+    
+    def __str__(self):
+        return f"{self.subject} - {self.topic}"
+
+
+class Course(models.Model):
+    """Model for courses."""
+    
+    title = models.CharField(max_length=255)
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='taught_courses',
+        limit_choices_to={'role': 'Teacher'}
+    )
+    grade_level = models.CharField(max_length=50)
+    subject = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'courses'
+        ordering = ['title']
+    
+    def __str__(self):
+        return self.title
+
+
+class Enrollment(models.Model):
+    """Model for student course enrollments."""
+    
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+        limit_choices_to={'role': 'Student'}
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='enrollments'
+    )
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'enrollments'
+        unique_together = ['student', 'course']
+        ordering = ['-enrolled_at']
+    
+    def __str__(self):
+        return f"{self.student.username} - {self.course.title}"
+
+
+class Unit(models.Model):
+    """Model for course units."""
+    
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='units'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'units'
+        ordering = ['course', 'order']
+    
+    def __str__(self):
+        return f"{self.course.title} - {self.title}"
+
+
+class GradeItem(models.Model):
+    """Model for gradeable items (assignments, quizzes, exams)."""
+    
+    ITEM_TYPES = [
+        ('Assignment', 'Assignment'),
+        ('Quiz', 'Quiz'),
+        ('Exam', 'Exam'),
+        ('Project', 'Project'),
+        ('Participation', 'Participation'),
+    ]
+    
+    unit = models.ForeignKey(
+        Unit,
+        on_delete=models.CASCADE,
+        related_name='grade_items'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    item_type = models.CharField(max_length=20, choices=ITEM_TYPES)
+    max_score = models.FloatField(default=100)
+    weight = models.FloatField(default=1.0)  # For weighted grading
+    due_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'grade_items'
+        ordering = ['unit', 'due_date']
+    
+    def __str__(self):
+        return f"{self.unit.course.title} - {self.title}"
+
+
+class TeacherCourseRequest(models.Model):
+    """Model for teacher course assignment requests."""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('declined', 'Declined'),
+        ('under_review', 'Under Review'),
+    ]
+
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='course_requests'
+    )
+    subject = models.CharField(max_length=100)
+    grade_level = models.CharField(max_length=10)
+    stream = models.CharField(max_length=50, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='reviewed_course_requests'
+    )
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['teacher', 'subject', 'grade_level', 'stream']
+
+    def __str__(self):
+        stream_info = f" - {self.stream}" if self.stream else ""
+        return f"{self.teacher.username}: {self.subject} - Grade {self.grade_level}{stream_info}"
+
+
+class StudentEnrollmentRequest(models.Model):
+    """Model for student course enrollment requests."""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('declined', 'Declined'),
+        ('under_review', 'Under Review'),
+    ]
+
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='enrollment_requests'
+    )
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='student_enrollment_requests'
+    )
+    family = models.ForeignKey(
+        'users.Family',
+        on_delete=models.CASCADE,
+        related_name='enrollment_requests',
+        null=True,
+        blank=True
+    )
+    subject = models.CharField(max_length=100)
+    grade_level = models.CharField(max_length=10)
+    stream = models.CharField(max_length=50, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='reviewed_enrollment_requests'
+    )
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['student', 'teacher', 'subject', 'grade_level', 'stream', 'family']
+
+    def __str__(self):
+        stream_info = f" - {self.stream}" if self.stream else ""
+        family_info = f" ({self.family.name})" if self.family else ""
+        return f"{self.student.username} -> {self.teacher.username}: {self.subject} - Grade {self.grade_level}{stream_info}{family_info}"
+
+
+class Grade(models.Model):
+    """Model for individual student grades."""
+    
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='grades',
+        limit_choices_to={'role': 'Student'}
+    )
+    grade_item = models.ForeignKey(
+        GradeItem,
+        on_delete=models.CASCADE,
+        related_name='grades'
+    )
+    score = models.FloatField(null=True, blank=True)
+    feedback = models.TextField(blank=True)
+    graded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='graded_items'
+    )
+    graded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'grades'
+        unique_together = ['student', 'grade_item']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.student.username} - {self.grade_item.title}: {self.score}"
+    
+    @property
+    def percentage(self):
+        """Calculate percentage score."""
+        if self.score is None:
+            return None
+        return (self.score / self.grade_item.max_score) * 100

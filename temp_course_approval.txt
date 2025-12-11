@@ -1,0 +1,387 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Card from '../Card';
+import { apiService } from '../../services/apiService';
+import { AcademicCapIcon, CheckCircleIcon, XCircleIcon, ClockIcon, EyeIcon } from '../icons/Icons';
+
+interface CourseRequest {
+  id: number;
+  teacher: {
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+  };
+  subject: string;
+  grade_level: string;
+  stream?: string;
+  status: 'pending' | 'approved' | 'declined' | 'under_review';
+  requested_at: string;
+  reviewed_at?: string;
+  reviewed_by?: {
+    id: number;
+    username: string;
+  };
+  review_notes?: string;
+}
+
+interface Notification {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+  timestamp: number;
+}
+
+const AdminCourseApprovalManager: React.FC = () => {
+  const [requests, setRequests] = useState<CourseRequest[]>([]);
+  const [selectedRequest, setSelectedRequest] = useState<CourseRequest | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'declined' | 'under_review'>('pending');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const loadRequests = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiService.get('/academics/teacher-course-requests/', {
+        params: filter !== 'all' ? { status: filter } : {}
+      });
+      setRequests(response.data || []);
+    } catch (error) {
+      console.error('Error loading course requests:', error);
+      setRequests([
+        {
+          id: 1,
+          teacher: { id: 1, username: 'teacher1', first_name: 'John', last_name: 'Doe' },
+          subject: 'Mathematics',
+          grade_level: '10',
+          status: 'pending',
+          requested_at: '2024-01-15T10:00:00Z'
+        },
+        {
+          id: 2,
+          teacher: { id: 2, username: 'teacher2', first_name: 'Jane', last_name: 'Smith' },
+          subject: 'Physics',
+          grade_level: '11',
+          stream: 'Natural Science',
+          status: 'pending',
+          requested_at: '2024-01-20T09:15:00Z'
+        },
+        {
+          id: 3,
+          teacher: { id: 3, username: 'teacher3', first_name: 'Bob', last_name: 'Johnson' },
+          subject: 'English',
+          grade_level: '9',
+          status: 'approved',
+          requested_at: '2024-01-10T14:30:00Z',
+          reviewed_at: '2024-01-11T16:45:00Z',
+          reviewed_by: { id: 4, username: 'admin1' },
+          review_notes: 'Approved for teaching English literature.'
+        }
+      ].filter(req => filter === 'all' || req.status === filter));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      loadRequests();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, loadRequests]);
+
+  const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = `${Date.now()}`;
+    setNotifications(prev => [...prev, { id, message, type, timestamp: Date.now() }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  const handleAction = async (requestId: number, action: 'approve' | 'decline' | 'under_review') => {
+    if (!selectedRequest) return;
+    setIsActionLoading(true);
+    try {
+      const endpoint = `/academics/teacher-course-requests/${requestId}/${action}/`;
+      await apiService.post(endpoint, { review_notes: reviewNotes });
+
+      setRequests(requests.map(req =>
+        req.id === requestId
+          ? {
+              ...req,
+              status: action === 'approve' ? 'approved' : action === 'decline' ? 'declined' : 'under_review',
+              review_notes: reviewNotes,
+              reviewed_at: new Date().toISOString()
+            }
+          : req
+      ));
+
+      addNotification(
+        `Course request ${action === 'approve' ? 'approved' : action === 'decline' ? 'declined' : 'set to under review'} successfully`,
+        'success'
+      );
+      setSelectedRequest(null);
+      setReviewNotes('');
+    } catch (error) {
+      console.error(`Error ${action}ing request:`, error);
+      addNotification(`Failed to ${action} request`, 'error');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircleIcon className="h-5 w-5 text-green-500" />;
+      case 'declined':
+        return <XCircleIcon className="h-5 w-5 text-red-500" />;
+      case 'under_review':
+        return <ClockIcon className="h-5 w-5 text-yellow-500" />;
+      default:
+        return <EyeIcon className="h-5 w-5 text-blue-500" />;
+    }
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'declined':
+        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'under_review':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      default:
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    }
+  };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <Card title="Course Approval Manager">
+      <div className="space-y-4">
+        {/* Notifications */}
+        <div className="fixed top-4 right-4 z-50 space-y-2 w-96 max-w-full">
+          {notifications.map(notif => (
+            <div
+              key={notif.id}
+              className={`p-4 rounded-lg shadow-lg text-white animate-in slide-in-from-right ${
+                notif.type === 'success' ? 'bg-green-500' :
+                notif.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+              }`}
+            >
+              {notif.message}
+            </div>
+          ))}
+        </div>
+
+        {/* Controls */}
+        <div className="flex flex-wrap gap-3 items-center justify-between">
+          <div className="flex gap-2">
+            {['pending', 'approved', 'declined', 'under_review', 'all'].map(status => (
+              <button
+                key={status}
+                onClick={() => setFilter(status as any)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filter === status
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="rounded"
+              />
+              Auto-refresh (10s)
+            </label>
+            <button
+              onClick={loadRequests}
+              disabled={isLoading}
+              className="px-3 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-dark disabled:bg-gray-400"
+            >
+              {isLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {/* Requests List */}
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '600px' }}>
+          {isLoading && !requests.length && <p className="text-center py-8 text-gray-500">Loading requests...</p>}
+          {!isLoading && requests.length === 0 && (
+            <p className="text-center py-8 text-gray-500">No course requests found.</p>
+          )}
+          {requests.length > 0 && (
+            <div className="grid gap-4">
+              {requests.map(request => (
+                <div
+                  key={request.id}
+                  onClick={() => setSelectedRequest(request)}
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    selectedRequest?.id === request.id
+                      ? 'border-primary bg-primary-light dark:bg-primary/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-primary'
+                  }`}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                        {request.teacher.first_name} {request.teacher.last_name}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">@{request.teacher.username}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Subject</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{request.subject}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Grade {request.grade_level} {request.stream && `(${request.stream})`}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {getStatusIcon(request.status)}
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(request.status)}`}>
+                            {request.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(request.requested_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Detail Panel */}
+        {selectedRequest && (
+          <div className="border-t-2 border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className="font-semibold text-lg mb-4 text-gray-900 dark:text-gray-100">
+              Review Course Request
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Teacher</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {selectedRequest.teacher.first_name} {selectedRequest.teacher.last_name}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Subject</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{selectedRequest.subject}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Grade Level</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {selectedRequest.grade_level} {selectedRequest.stream && `(${selectedRequest.stream})`}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Requested Date</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(selectedRequest.requested_at)}</p>
+              </div>
+              {selectedRequest.reviewed_at && (
+                <>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Reviewed By</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">
+                      {selectedRequest.reviewed_by?.username || '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Reviewed Date</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(selectedRequest.reviewed_at)}</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {selectedRequest.review_notes && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Previous Review Notes</p>
+                <p className="p-2 bg-gray-100 dark:bg-gray-800 rounded text-gray-900 dark:text-gray-100">
+                  {selectedRequest.review_notes}
+                </p>
+              </div>
+            )}
+
+            {selectedRequest.status === 'pending' && (
+              <>
+                <textarea
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  placeholder="Add review notes (optional)..."
+                  className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white mb-4"
+                  rows={3}
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleAction(selectedRequest.id, 'approve')}
+                    disabled={isActionLoading}
+                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircleIcon className="h-5 w-5" />
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleAction(selectedRequest.id, 'under_review')}
+                    disabled={isActionLoading}
+                    className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ClockIcon className="h-5 w-5" />
+                    Under Review
+                  </button>
+                  <button
+                    onClick={() => handleAction(selectedRequest.id, 'decline')}
+                    disabled={isActionLoading}
+                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <XCircleIcon className="h-5 w-5" />
+                    Decline
+                  </button>
+                </div>
+              </>
+            )}
+
+            {selectedRequest.status !== 'pending' && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-800 dark:text-blue-200">
+                This request has already been reviewed. Status: <strong>{selectedRequest.status.replace('_', ' ')}</strong>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+};
+
+export default AdminCourseApprovalManager;

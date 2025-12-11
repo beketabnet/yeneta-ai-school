@@ -1,0 +1,8 @@
+{
+  "name": "Copy of YENETA-Ethiopia AI School Platform",
+  "description": "A comprehensive AI co-teacher platform designed to scale personalization, automate workloads for teachers, and provide 24/7 personalized support for students in the Ethiopian educational ecosystem.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

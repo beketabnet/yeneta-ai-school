@@ -1,0 +1,42 @@
+[project]
+name = "yeneta-ai-school"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9.0",
+    "beautifulsoup4>=4.12.3",
+    "channels>=4.3.1",
+    "chromadb>=0.4.22",
+    "colorlog>=6.8.0",
+    "django>=4.2,<5.0",
+    "django-cors-headers>=4.3.0",
+    "djangorestframework>=3.14.0",
+    "djangorestframework-simplejwt>=5.3.0",
+    "docx2txt>=0.8",
+    "google-generativeai>=0.3.2",
+    "httpx>=0.26.0",
+    "langchain>=0.1.9",
+    "langchain-community>=0.0.24",
+    "langchain-google-genai>=0.0.9",
+    "langchain-openai>=0.0.8",
+    "lxml>=5.1.0",
+    "numpy>=1.24.0,<2.0.0",
+    "ollama>=0.1.7",
+    "openai>=1.12.0",
+    "pandas>=2.0.0",
+    "pillow>=10.2.0",
+    "pypdf>=3.17.0",
+    "pypdf2>=3.0.0",
+    "python-dateutil>=2.8.2",
+    "python-docx>=1.1.0",
+    "python-dotenv>=1.0.0",
+    "reportlab>=4.0.0",
+    "pytz>=2024.1",
+    "requests>=2.31.0",
+    "sentence-transformers>=2.3.1",
+    "tiktoken>=0.6.0",
+    "unstructured>=0.11.0",
+    "mcp-django>=0.13.0",
+]

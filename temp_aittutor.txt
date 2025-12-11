@@ -1,0 +1,789 @@
+import React, { useState, useRef, useEffect, useContext, useCallback, useMemo } from 'react';
+import { ChatMessage, Expression } from '../../types';
+import { apiService } from '../../services/apiService';
+import Card from '../Card';
+import { PaperAirplaneIcon, VideoCameraIcon, VideoCameraSlashIcon, PaperclipIcon, MicrophoneIcon } from '../icons/Icons';
+import MarkdownRenderer from '../common/MarkdownRenderer';
+import { useEngagementMonitorHybrid } from '../../hooks/useEngagementMonitorHybrid';
+import { AuthContext } from '../../contexts/AuthContext';
+import { EngagementContext } from '../../contexts/EngagementContext';
+import { ChevronDownIcon } from '../icons/Icons';
+import TutorConfigPanel from './aiTutor/TutorConfigPanel';
+
+interface EngagementLog {
+    timestamp: string;
+    message: string;
+    color: string;
+}
+
+const DEFAULT_WELCOME_MESSAGE = "Hello! I'm YENETA, your AI Tutor. How can I help you with your studies today? You can ask me questions, upload a photo of your work, or even send a voice message.";
+
+const formatList = (items: string[]): string => {
+    if (items.length === 0) return '';
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+};
+
+const buildCurriculumWelcomeMessage = ({
+    grade,
+    stream,
+    subject,
+    chapter,
+    chapterTopics,
+    chapterSummary,
+}: {
+    grade: string;
+    stream: string;
+    subject: string;
+    chapter: string;
+    chapterTopics?: string[];
+    chapterSummary?: string | null;
+}): string => {
+    const focusSegments = [
+        grade && grade.trim(),
+        stream && `${stream.trim()} stream`,
+        subject && subject.trim(),
+    ].filter(Boolean) as string[];
+
+    const focusText = focusSegments.length > 0
+        ? `for ${formatList(focusSegments)}`
+        : 'aligned with the Ethiopian curriculum';
+
+    let chapterText = '';
+    if (chapter && chapter.trim().length > 0) {
+        if (chapterTopics && chapterTopics.length > 0) {
+            // Format topics more naturally
+            const formattedTopics = chapterTopics.slice(0, 4).map(t => {
+                // Capitalize first letter
+                return t.charAt(0).toUpperCase() + t.slice(1);
+            });
+            if (formattedTopics.length <= 2) {
+                chapterText = ` We'll focus on ${chapter.trim()}, covering ${formattedTopics.join(' and ')}.`;
+            } else {
+                const lastTopic = formattedTopics.pop();
+                chapterText = ` We'll focus on ${chapter.trim()}, covering ${formattedTopics.join(', ')}, and ${lastTopic}.`;
+            }
+        } else if (chapterSummary) {
+            const summaryPreview = chapterSummary.substring(0, 200).trim();
+            // Ensure summary ends properly
+            let cleanSummary = summaryPreview;
+            if (!cleanSummary.endsWith('.') && !cleanSummary.endsWith('!') && !cleanSummary.endsWith('?')) {
+                const lastPeriod = cleanSummary.lastIndexOf('.');
+                if (lastPeriod > cleanSummary.length * 0.7) {
+                    cleanSummary = cleanSummary.substring(0, lastPeriod + 1);
+                }
+            }
+            chapterText = ` We'll explore ${chapter.trim()}. ${cleanSummary}${chapterSummary.length > 200 ? '...' : ''}`;
+        } else {
+            chapterText = ` We'll dive into ${chapter.trim()} using your textbooks.`;
+        }
+    } else {
+        chapterText = ' Set a chapter, unit, or lesson above to focus our session even more.';
+    }
+
+    return `Selam! I'm YENETA, your AI Tutor ${focusText}. I'm ready to use Ethiopian curriculum resources to guide you.${chapterText} When you're ready, ask me anything or upload your work, and we'll explore it together.`;
+};
+
+const AITutor: React.FC = () => {
+    const [messages, setMessages] = useState<ChatMessage[]>([
+        { role: 'model', content: DEFAULT_WELCOME_MESSAGE }
+    ]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isMonitorEnabled, setIsMonitorEnabled] = useState(false);
+    const [currentExpression, setCurrentExpression] = useState<Expression>('unknown');
+    const [engagementLogs, setEngagementLogs] = useState<EngagementLog[]>([]);
+    const [attachment, setAttachment] = useState<File | null>(null);
+    const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [useRAG, setUseRAG] = useState(true);
+    const [ragStatus, setRagStatus] = useState<'success' | 'fallback' | 'disabled'>('disabled');
+    const [ragSources, setRagSources] = useState<string[]>([]);
+    const [ragMessage, setRagMessage] = useState<string | null>(null);
+    const [selectedGrade, setSelectedGrade] = useState<string>('');
+    const [selectedSubject, setSelectedSubject] = useState<string>('');
+    const [selectedStream, setSelectedStream] = useState<string>('');
+    const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+    const [streamRequired, setStreamRequired] = useState(false);
+    const [curriculumConfig, setCurriculumConfig] = useState<any>(null);
+    const [chapterInput, setChapterInput] = useState<string>('');
+    const [hasUserInteracted, setHasUserInteracted] = useState(false);
+    const [isSubjectsLoading, setIsSubjectsLoading] = useState(false);
+    const [isSavingConfig, setIsSavingConfig] = useState(false);
+    const [saveConfigSuccess, setSaveConfigSuccess] = useState(false);
+    const [savedConfig, setSavedConfig] = useState<any>(null);
+    const [chapterTopics, setChapterTopics] = useState<string[]>([]);
+    const [chapterSummary, setChapterSummary] = useState<string | null>(null);
+    const [hasConfigChanged, setHasConfigChanged] = useState(false);
+
+    const { user } = useContext(AuthContext);
+    const { updateStudentEngagement } = useContext(EngagementContext);
+
+    // Fetch curriculum configuration on mount
+    useEffect(() => {
+        const fetchCurriculumConfig = async () => {
+            try {
+                const config = await apiService.getCurriculumConfig();
+                setCurriculumConfig(config);
+            } catch (err) {
+                console.error('Failed to fetch curriculum config:', err);
+            }
+        };
+        fetchCurriculumConfig();
+    }, []);
+
+    // Load saved tutor configuration on mount
+    useEffect(() => {
+        const loadSavedConfig = async () => {
+            try {
+                const config = await apiService.getTutorConfiguration();
+                if (config && config.id) {
+                    setSavedConfig(config);
+                    setUseRAG(config.use_ethiopian_curriculum || true);
+                    if (config.grade) setSelectedGrade(config.grade);
+                    if (config.stream) setSelectedStream(config.stream);
+                    if (config.subject) setSelectedSubject(config.subject);
+                    if (config.chapter_input) setChapterInput(config.chapter_input);
+                    if (config.chapter_topics) setChapterTopics(config.chapter_topics);
+                    if (config.chapter_summary) setChapterSummary(config.chapter_summary);
+                    setHasConfigChanged(false);
+                    
+                    // Generate welcome message for loaded config only if it exists
+                    if (config.use_ethiopian_curriculum && config.grade && config.id) {
+                        setIsGeneratingWelcome(true);
+                        try {
+                            const response = await apiService.generateTutorWelcomeMessage({
+                                grade: config.grade,
+                                subject: config.subject || undefined,
+                                stream: config.stream || undefined,
+                                chapter: config.chapter_input || undefined,
+                                chapter_title: config.chapter_title || undefined,
+                                chapter_topics: config.chapter_topics || undefined,
+                                chapter_summary: config.chapter_summary || undefined,
+                                learning_objectives: config.learning_objectives || undefined,
+                                use_ethiopian_curriculum: config.use_ethiopian_curriculum,
+                            });
+                            setGeneratedWelcomeMessage(response.welcome_message);
+                        } catch (error) {
+                            console.error('Failed to generate welcome message:', error);
+                        } finally {
+                            setIsGeneratingWelcome(false);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load saved configuration:', err);
+            }
+        };
+        loadSavedConfig();
+    }, []);
+
+    // Track configuration changes
+    useEffect(() => {
+        if (!savedConfig) {
+            setHasConfigChanged(false);
+            setSaveConfigSuccess(false);
+            return;
+        }
+
+        const hasChanged = 
+            savedConfig.use_ethiopian_curriculum !== useRAG ||
+            savedConfig.grade !== selectedGrade ||
+            savedConfig.stream !== selectedStream ||
+            savedConfig.subject !== selectedSubject ||
+            savedConfig.chapter_input !== chapterInput;
+
+        setHasConfigChanged(hasChanged);
+        // Reset success state when user makes new changes
+        if (hasChanged) {
+            setSaveConfigSuccess(false);
+        }
+    }, [useRAG, selectedGrade, selectedStream, selectedSubject, chapterInput, savedConfig]);
+
+    // Initialize grade from user profile (only if no saved config)
+    useEffect(() => {
+        if (user?.grade && !savedConfig?.grade) {
+            setSelectedGrade(user.grade);
+        }
+    }, [user, savedConfig]);
+
+    // Fetch subjects when grade or stream changes
+    const fetchSubjectsForGrade = useCallback(async (grade: string, stream?: string) => {
+        setIsSubjectsLoading(true);
+        try {
+            const data = await apiService.getSubjectsForGrade({ grade, stream });
+            setAvailableSubjects(data.subjects || []);
+            setStreamRequired(data.stream_required || false);
+            
+            // Reset subject if it's not in the new list
+            if (data.subjects && data.subjects.length > 0 && !data.subjects.includes(selectedSubject)) {
+                setSelectedSubject('');
+            }
+        } catch (err) {
+            console.error('Failed to fetch subjects:', err);
+            setAvailableSubjects([]);
+            setStreamRequired(false);
+        } finally {
+            setIsSubjectsLoading(false);
+        }
+    }, [selectedSubject]);
+
+    // Load subjects when grade changes - always fetch to update streamRequired
+    useEffect(() => {
+        if (selectedGrade && useRAG) {
+            // Always fetch when grade changes to update streamRequired state
+            // If stream is required and selected, fetch with stream
+            // Otherwise, fetch without stream to get the streamRequired flag
+            if (selectedStream) {
+                fetchSubjectsForGrade(selectedGrade, selectedStream);
+            } else {
+                fetchSubjectsForGrade(selectedGrade);
+            }
+        }
+    }, [selectedGrade, selectedStream, useRAG, fetchSubjectsForGrade]);
+
+    const [generatedWelcomeMessage, setGeneratedWelcomeMessage] = useState<string | null>(null);
+    const [isGeneratingWelcome, setIsGeneratingWelcome] = useState(false);
+
+    const welcomeMessage = useMemo(() => {
+        // Use LLM-generated message if available, otherwise use default
+        if (generatedWelcomeMessage) {
+            return generatedWelcomeMessage;
+        }
+        return DEFAULT_WELCOME_MESSAGE;
+    }, [generatedWelcomeMessage]);
+
+    useEffect(() => {
+        if (hasUserInteracted) {
+            return;
+        }
+        setMessages(prev => {
+            if (prev.length !== 1) return prev;
+            const first = prev[0];
+            if (!first || first.role !== 'model' || first.content === welcomeMessage) {
+                return prev;
+            }
+            return [{ ...first, content: welcomeMessage }];
+        });
+    }, [welcomeMessage, hasUserInteracted]);
+
+    const handleGradeChange = (newGrade: string) => {
+        setSelectedGrade(newGrade);
+        setSelectedStream('');
+        setSelectedSubject('');
+        setAvailableSubjects([]);
+        setIsSubjectsLoading(false);
+        if (newGrade !== 'Grade 11' && newGrade !== 'Grade 12') {
+            setStreamRequired(false);
+        }
+    };
+
+    const handleStreamChange = (newStream: string) => {
+        setSelectedStream(newStream);
+        setSelectedSubject('');
+    };
+
+    const handleToggleCurriculum = () => {
+        setUseRAG(prev => {
+            const next = !prev;
+            if (!next) {
+                setRagStatus('disabled');
+                setRagSources([]);
+                setRagMessage(null);
+                setChapterInput('');
+            }
+            return next;
+        });
+    };
+
+    const handleSaveConfiguration = async () => {
+        if (!selectedGrade || (streamRequired && !selectedStream)) {
+            return;
+        }
+
+        setIsSavingConfig(true);
+        setSaveConfigSuccess(false);
+
+        try {
+            const configData = {
+                use_ethiopian_curriculum: useRAG,
+                grade: selectedGrade,
+                stream: selectedStream || undefined,
+                subject: selectedSubject || undefined,
+                chapter_input: chapterInput || undefined,
+            };
+
+            const saved = await apiService.saveTutorConfiguration(configData);
+            setSavedConfig(saved);
+            
+            // Update chapter metadata if available
+            if (saved.chapter_topics) {
+                setChapterTopics(saved.chapter_topics);
+            }
+            if (saved.chapter_summary) {
+                setChapterSummary(saved.chapter_summary);
+            }
+
+            // Update savedConfig to reflect the new saved state
+            setSavedConfig(saved);
+            setSaveConfigSuccess(true);
+            setHasConfigChanged(false);
+            
+            // Generate new welcome message after saving (only after successful save)
+            if (useRAG && selectedGrade) {
+                setIsGeneratingWelcome(true);
+                try {
+                    const response = await apiService.generateTutorWelcomeMessage({
+                        grade: selectedGrade,
+                        subject: selectedSubject || undefined,
+                        stream: selectedStream || undefined,
+                        chapter: chapterInput || undefined,
+                        chapter_title: saved.chapter_title || undefined,
+                        chapter_topics: saved.chapter_topics || undefined,
+                        chapter_summary: saved.chapter_summary || undefined,
+                        learning_objectives: saved.learning_objectives || undefined,
+                        use_ethiopian_curriculum: useRAG,
+                    });
+                    setGeneratedWelcomeMessage(response.welcome_message);
+                } catch (error) {
+                    console.error('Failed to generate welcome message:', error);
+                    // Keep default message on error
+                } finally {
+                    setIsGeneratingWelcome(false);
+                }
+            }
+            // Keep success state until next change
+        } catch (error) {
+            console.error('Failed to save configuration:', error);
+            alert('Failed to save configuration. Please try again.');
+        } finally {
+            setIsSavingConfig(false);
+        }
+    };
+
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const logContainerRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+    const getExpressionStyle = (expression: Expression): Omit<EngagementLog, 'timestamp'> => {
+        switch (expression) {
+            case 'happy': return { message: 'Student appears engaged and happy.', color: 'text-green-400' };
+            case 'surprised': return { message: 'Student appears surprised.', color: 'text-yellow-400' };
+            case 'neutral': return { message: 'Student appears neutral.', color: 'text-gray-400' };
+            case 'sad': return { message: 'Student may be sad or confused.', color: 'text-blue-400' };
+            case 'angry': return { message: 'Student may be frustrated or angry.', color: 'text-red-400' };
+            case 'fearful': return { message: 'Student may be fearful or anxious.', color: 'text-purple-400'};
+            default: return { message: 'Engagement status is unknown.', color: 'text-gray-500' };
+        }
+    };
+
+    // Track previous expression to avoid duplicate logs
+    const prevExpressionRef = useRef<Expression | null>(null);
+
+    // Memoize the expression change handler to prevent hook re-initialization
+    const handleExpressionChange = useCallback((expression: Expression) => {
+        setCurrentExpression(expression);
+        if (user && isMonitorEnabled) {
+            updateStudentEngagement(user.id.toString(), expression);
+        }
+        // Only log if expression changed
+        if (isMonitorEnabled && expression !== prevExpressionRef.current) {
+            prevExpressionRef.current = expression;
+            const { message, color } = getExpressionStyle(expression);
+            const timestamp = new Date().toLocaleTimeString();
+            setEngagementLogs(prev => [{ timestamp, message, color }, ...prev.slice(0, 99)]);
+        }
+    }, [user, isMonitorEnabled, updateStudentEngagement]);
+
+    useEngagementMonitorHybrid({
+        videoRef,
+        canvasRef,
+        isMonitorEnabled,
+        onExpressionChange: handleExpressionChange
+    });
+
+    useEffect(() => {
+        chatContainerRef.current?.scrollTo(0, chatContainerRef.current.scrollHeight);
+    }, [messages]);
+    
+    useEffect(() => {
+        logContainerRef.current?.scrollTo(0, 0);
+    }, [engagementLogs]);
+
+    const handleToggleMonitor = () => {
+        const newIsEnabled = !isMonitorEnabled;
+        setIsMonitorEnabled(newIsEnabled);
+        if (!newIsEnabled) {
+            setEngagementLogs([]);
+            setCurrentExpression('unknown');
+        }
+    };
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        // TODO: File upload with streaming to backend is not implemented yet.
+        if (!input.trim() || isLoading) return;
+
+        const userMessage: ChatMessage = { role: 'user', content: input, imageUrl: attachmentPreview || undefined };
+        setMessages(prev => [...prev, userMessage]);
+        setHasUserInteracted(true);
+        
+        const messageToSend = input;
+        
+        setInput('');
+        setAttachment(null);
+        setAttachmentPreview(null);
+        setIsLoading(true);
+
+        try {
+            // Prepare RAG parameters
+            const ragParams = useRAG ? {
+                grade: selectedGrade,
+                subject: selectedSubject,
+                stream: selectedStream || undefined,
+                chapter: chapterInput.trim() ? chapterInput.trim() : undefined,
+            } : undefined;
+            
+            const { stream, headers } = await apiService.getTutorResponseStream(messageToSend, useRAG, ragParams);
+            
+            // Extract RAG metadata from headers
+            const status = headers?.['x-rag-status'] || 'disabled';
+            const sources = headers?.['x-rag-sources']?.split(',').filter(Boolean) || [];
+            const message = headers?.['x-rag-message'] || null;
+            
+            setRagStatus(status as 'success' | 'fallback' | 'disabled');
+            setRagSources(sources);
+            setRagMessage(message);
+            
+            let modelResponse = '';
+            setMessages(prev => [...prev, { role: 'model', content: '' }]);
+
+            for await (const chunk of stream) {
+                modelResponse += chunk;
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1].content = modelResponse;
+                    return newMessages;
+                });
+            }
+
+        } catch (error) {
+            console.error(error);
+            setMessages(prev => [...prev, { role: 'model', content: "Sorry, I'm having trouble connecting to the AI Tutor service right now. Please try again later." }]);
+            setRagStatus('disabled');
+            setRagSources([]);
+            setRagMessage(null);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
+            setAttachment(file);
+            if (file.type.startsWith('image/')) {
+                 const reader = new FileReader();
+                reader.onloadend = () => setAttachmentPreview(reader.result as string);
+                reader.readAsDataURL(file);
+            } else {
+                setAttachmentPreview('pdf'); // Special key for PDF icon
+            }
+        }
+         if (e.target) { e.target.value = ''; } // Reset file input
+    };
+
+    const handleMicPress = async () => {
+        if (isRecording) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Your browser does not support audio recording.");
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            recorder.start();
+            setIsRecording(true);
+            recorder.onstop = () => {
+                // In a real app, you would send the audio chunks to a Speech-to-Text API.
+                // Here, we simulate the result for demonstration.
+                setInput(prev => prev + "[Simulated transcribed voice message] ");
+                stream.getTracks().forEach(track => track.stop()); // Stop mic access
+            };
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Could not access the microphone. Please check permissions.");
+        }
+    };
+
+    const handleMicRelease = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+    
+    const expressionEmojiMap: Record<Expression, string> = {
+        happy: '😊', sad: '😟', angry: '😠', fearful: '😨', disgusted: '🤢',
+        surprised: '😮', neutral: '😐', unknown: '🤔',
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+                <Card title="Your Personal AI Tutor">
+                    <div className="space-y-4">
+                        <TutorConfigPanel
+                            useRAG={useRAG}
+                            onToggleRAG={handleToggleCurriculum}
+                            ragStatus={ragStatus}
+                            ragMessage={ragMessage}
+                            selectedGrade={selectedGrade}
+                            onGradeChange={handleGradeChange}
+                            streamRequired={streamRequired}
+                            selectedStream={selectedStream}
+                            onStreamChange={handleStreamChange}
+                            selectedSubject={selectedSubject}
+                            onSubjectChange={(value) => setSelectedSubject(value)}
+                            availableSubjects={availableSubjects}
+                            isSubjectsLoading={isSubjectsLoading}
+                            chapterInput={chapterInput}
+                            onChapterChange={(value) => setChapterInput(value)}
+                            onSave={handleSaveConfiguration}
+                            isSaving={isSavingConfig}
+                            saveSuccess={saveConfigSuccess}
+                            hasConfigChanged={hasConfigChanged}
+                        />
+                        <div className="flex flex-col h-[60vh] bg-gray-50 dark:bg-gray-900 rounded-lg">
+                            <div ref={chatContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto">
+                            {messages.map((msg, index) => (
+                                <div key={index}>
+                                    <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-lg p-3 rounded-xl ${msg.role === 'user' ? 'bg-primary text-white' : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+                                            {msg.imageUrl && msg.imageUrl !== 'pdf' && <img src={msg.imageUrl} alt="attachment" className="rounded-lg mb-2 max-w-xs" />}
+                                            {msg.imageUrl === 'pdf' && <div className="text-sm p-2 bg-gray-200 dark:bg-gray-600 rounded-md mb-2">Attached PDF: {attachment?.name || 'document.pdf'}</div>}
+                                            {msg.content && msg.role === 'model' && <MarkdownRenderer content={msg.content} className="text-sm" />}
+                                            {msg.content && msg.role === 'user' && <p className="text-sm whitespace-pre-wrap">{msg.content}</p>}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* RAG Status Badge - Only show after last AI response */}
+                                    {msg.role === 'model' && index === messages.length - 1 && !isLoading && (
+                                        <div className="flex justify-start mt-2">
+                                            <div className="max-w-lg">
+                                                {/* Success Badge */}
+                                                {ragStatus === 'success' && ragSources.length > 0 && (
+                                                    <div className="inline-block px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-green-600 dark:text-green-400 text-xs font-semibold">✅ Based on Curriculum</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                                            {ragSources.slice(0, 2).join(', ')}{ragSources.length > 2 ? ` +${ragSources.length - 2} more` : ''}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Fallback Badge */}
+                                                {ragStatus === 'fallback' && ragMessage && (
+                                                    <div className="inline-block px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-orange-600 dark:text-orange-400 text-xs font-semibold">⚠️ AI Model Only</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                                            {ragMessage}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Disabled Badge */}
+                                                {ragStatus === 'disabled' && useRAG === false && (
+                                                    <div className="inline-block px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                                        <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold">ℹ️ Curriculum mode disabled</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {isLoading && messages[messages.length-1].role === 'user' && (
+                                <div className="flex justify-start">
+                                    <div className="max-w-lg px-4 py-2 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                        <p className="text-sm animate-pulse">YENETA is thinking...</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Quick Action Buttons */}
+                        {messages.length === 1 && (
+                            <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Quick Start:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => setInput("Explain to me how photosynthesis works")}
+                                        className="px-3 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                                    >
+                                        📚 Explain a concept
+                                    </button>
+                                    <button
+                                        onClick={() => setInput("Help me solve this math problem step by step")}
+                                        className="px-3 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                                    >
+                                        🧮 Solve a problem
+                                    </button>
+                                    <button
+                                        onClick={() => setInput("Give me practice questions on")}
+                                        className="px-3 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                                    >
+                                        ✍️ Practice questions
+                                    </button>
+                                    <button
+                                        onClick={() => setInput("Summarize the key points about")}
+                                        className="px-3 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-primary hover:text-white hover:border-primary transition-colors"
+                                    >
+                                        📝 Summarize topic
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                             {attachmentPreview && (
+                                <div className="p-2 mb-2 bg-gray-100 dark:bg-gray-700 rounded-md flex justify-between items-center text-sm">
+                                    <span>Attachment: {attachment?.name}</span>
+                                    <button onClick={() => { setAttachment(null); setAttachmentPreview(null); }} className="text-red-500 font-bold">&times;</button>
+                                </div>
+                            )}
+                            <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,application/pdf" />
+                                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="p-2 text-gray-500 dark:text-gray-400 hover:text-primary rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
+                                    <PaperclipIcon className="w-5 h-5"/>
+                                </button>
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder={isRecording ? "Recording..." : "Ask me anything..."}
+                                    className="flex-1 p-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    disabled={isLoading || isRecording}
+                                />
+                                <button
+                                    type="button"
+                                    onMouseDown={handleMicPress}
+                                    onMouseUp={handleMicRelease}
+                                    onTouchStart={handleMicPress}
+                                    onTouchEnd={handleMicRelease}
+                                    disabled={isLoading}
+                                    className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 ${isRecording ? 'text-red-500 animate-pulse' : 'text-gray-500 dark:text-gray-400 hover:text-primary'}`}
+                                >
+                                    <MicrophoneIcon className="w-5 h-5"/>
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isLoading || (!input.trim() && !attachment)}
+                                    className="p-2 text-white bg-primary rounded-full hover:bg-primary-dark disabled:bg-gray-400"
+                                >
+                                    <PaperAirplaneIcon className="w-5 h-5" />
+                                </button>
+                            </form>
+                        </div>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+            <div className="lg:col-span-1">
+                <Card title="Engagement Monitor">
+                    <div className="flex flex-col h-[65vh]">
+                        {/* Video Feed - Fixed Height */}
+                        <div className="relative w-full h-56 flex-shrink-0 bg-black rounded-lg overflow-hidden mb-4">
+                           <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover transform transition-transform ${isMonitorEnabled ? 'scale-x-[-1]' : 'scale-0'}`}
+                            />
+                            <canvas
+                                ref={canvasRef}
+                                className={`absolute top-0 left-0 w-full h-full transform transition-transform ${isMonitorEnabled ? 'scale-x-[-1]' : 'scale-0'}`}
+                            />
+                            {!isMonitorEnabled && (
+                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                                    <VideoCameraSlashIcon className="w-16 h-16" />
+                                    <p className="mt-2 text-sm">Monitor is off</p>
+                                </div>
+                            )}
+                             {isMonitorEnabled && (
+                                <div className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-2xl">
+                                    {expressionEmojiMap[currentExpression]}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Current Status - Prominent Display */}
+                        {isMonitorEnabled && currentExpression && (
+                            <div className="mb-3 p-3 bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg border-2 border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <span className="text-3xl animate-pulse">{expressionEmojiMap[currentExpression]}</span>
+                                        <div>
+                                            <p className="text-xs text-gray-400 uppercase tracking-wide">Current Status</p>
+                                            <p className={`text-sm font-semibold ${getExpressionStyle(currentExpression).color}`}>
+                                                {getExpressionStyle(currentExpression).message}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Status Logs - Constrained Height with Scroll */}
+                        <div className="flex-1 min-h-0 flex flex-col mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs text-gray-400 uppercase tracking-wide">History</p>
+                                {engagementLogs.length > 0 && (
+                                    <p className="text-xs text-gray-500">{engagementLogs.length} events</p>
+                                )}
+                            </div>
+                            <div ref={logContainerRef} className="flex-1 bg-black rounded-lg p-3 font-mono text-xs text-white overflow-y-auto">
+                                {engagementLogs.length === 0 && isMonitorEnabled && <p className="text-gray-500 animate-pulse">Calibrating engagement sensors...</p>}
+                                {engagementLogs.length === 0 && !isMonitorEnabled && <p className="text-gray-500">Enable monitor to see live analysis.</p>}
+                                {engagementLogs.map((log, index) => (
+                                    <p key={index} className="mb-1">
+                                        <span className="text-gray-500">{log.timestamp}</span>
+                                        <span className={`ml-2 ${log.color}`}>{log.message}</span>
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Control Button - Fixed at Bottom */}
+                        <div className="flex-shrink-0">
+                            <button 
+                                onClick={handleToggleMonitor}
+                                className={`w-full flex items-center justify-center space-x-2 px-4 py-2 font-semibold rounded-md text-white transition-colors ${
+                                    isMonitorEnabled ? 'bg-danger hover:bg-red-700' : 'bg-success hover:bg-green-700'
+                                }`}
+                            >
+                            {isMonitorEnabled ? <VideoCameraSlashIcon/> : <VideoCameraIcon/>}
+                            <span>{isMonitorEnabled ? 'Disable Monitor' : 'Enable Monitor'}</span>
+                            </button>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                                Your video is processed on this device and is not stored.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    );
+};
+
+export default AITutor;

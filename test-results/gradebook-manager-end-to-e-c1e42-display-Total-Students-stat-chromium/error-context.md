@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7] [cursor=pointer]:
+        - img [ref=e8]:
+          - generic [ref=e10]: የኔታ
+        - generic [ref=e11]: YENETA
+      - navigation [ref=e12]:
+        - button "AI Tutor" [ref=e13] [cursor=pointer]
+        - link "Features" [ref=e14] [cursor=pointer]:
+          - /url: "#features"
+        - link "About" [ref=e15] [cursor=pointer]:
+          - /url: "#about"
+        - button "Log in" [ref=e16] [cursor=pointer]
+        - button "Start for free" [ref=e17] [cursor=pointer]
+        - button "Toggle dark mode" [ref=e18] [cursor=pointer]:
+          - img [ref=e19]
+  - main [ref=e21]:
+    - generic [ref=e25]:
+      - heading "The AI Co-Teacher That Helps Every Educator Reach Every Learner" [level=1] [ref=e26]
+      - paragraph [ref=e27]: YENETA is the first AI co-teacher and platform that scales personalization across classrooms. Use YENETA alongside your existing tools, or as a complete AI-powered teaching partner.
+      - generic [ref=e28]:
+        - button "Start for free" [ref=e29] [cursor=pointer]
+        - button "Get a demo" [ref=e30] [cursor=pointer]
+    - generic [ref=e32]:
+      - heading "AI Tools to Support the Full Learning Day" [level=2] [ref=e33]
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - img [ref=e38]
+          - heading "For Teachers" [level=3] [ref=e40]
+          - paragraph [ref=e41]: Automate lesson planning, grading, and feedback to save 5-10 hours per week.
+        - generic [ref=e42]:
+          - img [ref=e45]
+          - heading "For Students" [level=3] [ref=e49]
+          - paragraph [ref=e50]: Provide students with 24/7 adaptive support that guides them to mastery.
+        - generic [ref=e51]:
+          - img [ref=e54]
+          - heading "For Administrators" [level=3] [ref=e56]
+          - paragraph [ref=e57]: Gain real-time insights into student progress and engagement for data-driven decisions.
+    - generic [ref=e59]:
+      - heading "Our Mission" [level=2] [ref=e60]
+      - paragraph [ref=e61]: Our mission is to leverage the power of artificial intelligence to create a resilient and high-quality educational ecosystem in Ethiopia. We aim to bridge the gaps in access and quality, providing tools that empower teachers, engage students, and support administrators, ultimately transforming education for millions.
+  - contentinfo [ref=e62]:
+    - generic [ref=e63]:
+      - paragraph [ref=e64]: © 2025 YENETA-Ethiopia. All Rights Reserved.
+      - generic [ref=e65]:
+        - button "Home" [ref=e66] [cursor=pointer]
+        - text: ·
+        - button "Privacy Policy" [ref=e67] [cursor=pointer]
+        - text: ·
+        - button "Terms of Service" [ref=e68] [cursor=pointer]
+```

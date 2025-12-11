@@ -1,0 +1,8 @@
+✅ Generation SUCCESS!
+Part of content: ```json
+{
+  "chapter_title": "Chapter 1: Communication and Language Fundamentals",
+  "chapter_number": "1",
+  "topics": [
+    "Listening Skills: Identifying Main Ideas and Specific Details",
+    "Spea...

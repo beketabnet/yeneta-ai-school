@@ -1,0 +1,53 @@
+--- Debugging RAG Content for Grade 7 English ---
+
+1. Searching for 'Road Safety'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: The problem may grow further in the coming decades due to the rapid rise of vehicle ownership 
+assoc...
+  Result 2: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+38
+ROAD SAFETY
+evidence as to their effectiveness in reducing crashes, ...
+  Result 3: Chapter ? - English grade 7.pdf
+  Snippet: while behind the wheel, driving without using a seat belt and not using a motorcycle helmet) 
+and th...
+  Result 4: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+34
+ROAD SAFETY
+Nuhamin: Yes, it also makes many children orphans and ma...
+  Result 5: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+37
+ROAD SAFETY
+1. Look at the picture below. What is happening in the p...
+
+2. Searching for 'Talking about Preferences'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: Kebede: Thank you!
+Activity 1.6: Discuss in groups why people prefer or do not prefer to live in the...
+  Result 2: Chapter ? - English grade 7.pdf
+  Snippet: D)  I need a few items at the store. Clothespins, a bottle opener and napkins.
+4. A)       The party...
+
+7. Testing Semantic Search for 'Table of Contents'...
+  Result 1: Chapter ? - Title: ?
+  Snippet: Activity 4.19: Complete the sentences with the prepositions in the box below. 
+The prepositions can be repeated.
+about   in out of by on for to from
+Example: Tolossa lives on the second floor.
+1. Odda...
+  Result 2: Chapter 1 - Title: ?
+  Snippet: English Grade 7 Student Book
+2
+LIFE IN THE COUNTRYSIDE
+Table of Contents
+UNIT ONE: LIFE IN THE COUNTRYSIDE ................................................................................................
+  Result 3: Chapter ? - Title: ?
+  Snippet: English Grade 7 Student Book
+77
+LAND CONSERVATION 
+Picture  A: Land Preservation
+Picture B: Land Restoration
+Picture C: Land Remediation...

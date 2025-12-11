@@ -1,0 +1,62 @@
+(venv) PS D:\django_project\yeneta-ai-school\yeneta_backend> python manage.py runserver
+Watching for file changes with StatReloader
+Performing system checks...
+
+OpenAI API key not found
+System check identified no issues (0 silenced).
+November 11, 2025 - 18:32:55
+Django version 4.2.26, using settings 'yeneta_backend.settings'
+Starting development server at http://127.0.0.1:8000/      
+Quit the server with CTRL-BREAK.
+
+[11/Nov/2025 18:33:30] "GET /api/users/me/ HTTP/1.1" 200 183
+[11/Nov/2025 18:33:30] "GET /api/users/me/ HTTP/1.1" 200 183
+[11/Nov/2025 18:33:30] "GET /api/analytics/live-engagement/ HTTP/1.1" 200 209
+[11/Nov/2025 18:33:30] "GET /api/users/students/ HTTP/1.1" 200 358
+[11/Nov/2025 18:33:30] "GET /api/analytics/live-engagement/ HTTP/1.1" 200 209
+[11/Nov/2025 18:33:30] "GET /api/users/students/ HTTP/1.1" 200 358
+[11/Nov/2025 18:33:30] "GET /api/analytics/student-engagement-history/?days=7&student_id=5 HTTP/1.1" 200 2
+[11/Nov/2025 18:33:30] "GET /api/analytics/student-engagement-history/?days=7&student_id=5 HTTP/1.1" 200 2
+[11/Nov/2025 18:33:30] "GET /api/analytics/student-engagement-history/?days=7&student_id=3 HTTP/1.1" 200 4477
+[11/Nov/2025 18:33:30] "GET /api/analytics/student-engagement-history/?days=7&student_id=3 HTTP/1.1" 200 4477
+Gemini quota exceeded: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit.
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0 
+Please retry in 23.902674793s. [links {
+  description: "Learn more about Gemini API quotas"        
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits" 
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 23
+}
+]. Attempting fallback to Ollama...
+[11/Nov/2025 18:34:07] "POST /api/ai-tools/generate-rubric/ HTTP/1.1" 200 6849
+[11/Nov/2025 18:34:31] "POST /api/ai-tools/export-rubric/ HTTP/1.1" 200 3983
+[11/Nov/2025 18:35:15] "POST /api/ai-tools/export-rubric/ HTTP/1.1" 200 38251
+[11/Nov/2025 18:36:27] "POST /api/ai-tools/export-rubric/ HTTP/1.1" 200 3983
+[11/Nov/2025 18:36:55] "POST /api/ai-tools/export-rubric/ HTTP/1.1" 200 38251
+(venv) PS D:\django_project\yeneta-ai-school\yeneta_backend>

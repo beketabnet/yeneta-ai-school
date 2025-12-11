@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection System Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border: 2px solid #00ff00;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .status {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .success { background: #004400; color: #00ff00; }
+        .error { background: #440000; color: #ff0000; }
+        .warning { background: #444400; color: #ffff00; }
+        .info { background: #000044; color: #00aaff; }
+        h1 { color: #00ff00; text-align: center; }
+        h2 { color: #00aaff; border-bottom: 2px solid #00aaff; padding-bottom: 10px; }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover { background: #00cc00; }
+        video, canvas {
+            max-width: 100%;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+        }
+        #videoContainer {
+            position: relative;
+            display: inline-block;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Engagement Monitor Detection System Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Library Loading Test</h2>
+        <div id="libraryTests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Model Files Test</h2>
+        <div id="modelTests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Webcam Test</h2>
+        <button onclick="testWebcam()">Test Webcam</button>
+        <div id="webcamTest"></div>
+        <div id="videoContainer" style="display:none;">
+            <video id="video" autoplay playsinline muted width="640" height="480"></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. YOLO Detection Test</h2>
+        <button onclick="testYOLO()">Test YOLO</button>
+        <div id="yoloTest"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. face-api.js Detection Test</h2>
+        <button onclick="testFaceAPI()">Test face-api.js</button>
+        <div id="faceapiTest"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    
+    <script>
+        let video, canvas, ctx;
+        let yoloSession = null;
+        let stream = null;
+
+        // Test 1: Library Loading
+        function testLibraries() {
+            const results = document.getElementById('libraryTests');
+            results.innerHTML = '';
+            
+            // Test ONNX Runtime
+            if (typeof ort !== 'undefined') {
+                results.innerHTML += '<div class="status success">✅ ONNX Runtime loaded successfully</div>';
+                results.innerHTML += `<div class="status info">Version: ${ort.version || 'Unknown'}</div>`;
+            } else {
+                results.innerHTML += '<div class="status error">❌ ONNX Runtime NOT loaded</div>';
+            }
+            
+            // Test face-api.js
+            if (typeof faceapi !== 'undefined') {
+                results.innerHTML += '<div class="status success">✅ face-api.js loaded successfully</div>';
+            } else {
+                results.innerHTML += '<div class="status error">❌ face-api.js NOT loaded</div>';
+            }
+        }
+
+        // Test 2: Model Files
+        async function testModels() {
+            const results = document.getElementById('modelTests');
+            results.innerHTML = '<div class="status info">Testing model files...</div>';
+            
+            // Test YOLO model
+            try {
+                const yoloResponse = await fetch('/models/yolov11n.onnx', { method: 'HEAD' });
+                if (yoloResponse.ok) {
+                    const size = yoloResponse.headers.get('content-length');
+                    const sizeMB = (size / 1024 / 1024).toFixed(2);
+                    results.innerHTML += `<div class="status success">✅ YOLOv11 model found (${sizeMB} MB)</div>`;
+                } else {
+                    results.innerHTML += '<div class="status error">❌ YOLOv11 model NOT found at /models/yolov11n.onnx</div>';
+                }
+            } catch (error) {
+                results.innerHTML += `<div class="status error">❌ Error checking YOLO model: ${error.message}</div>`;
+            }
+            
+            // Test face-api.js models
+            const faceModels = [
+                'tiny_face_detector_model-weights_manifest.json',
+                'face_expression_model-weights_manifest.json'
+            ];
+            
+            for (const model of faceModels) {
+                try {
+                    const response = await fetch(`/models/${model}`, { method: 'HEAD' });
+                    if (response.ok) {
+                        results.innerHTML += `<div class="status success">✅ ${model} found</div>`;
+                    } else {
+                        results.innerHTML += `<div class="status error">❌ ${model} NOT found</div>`;
+                        results.innerHTML += '<div class="status warning">⚠️ face-api.js models missing! Expression detection will fail.</div>';
+                    }
+                } catch (error) {
+                    results.innerHTML += `<div class="status error">❌ Error checking ${model}: ${error.message}</div>`;
+                }
+            }
+        }
+
+        // Test 3: Webcam
+        async function testWebcam() {
+            const results = document.getElementById('webcamTest');
+            results.innerHTML = '<div class="status info">Testing webcam...</div>';
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: 'user' },
+                    audio: false
+                });
+                
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                
+                video.srcObject = stream;
+                await video.play();
+                
+                document.getElementById('videoContainer').style.display = 'block';
+                results.innerHTML = '<div class="status success">✅ Webcam started successfully</div>';
+                results.innerHTML += '<div class="status info">Video feed should appear above</div>';
+            } catch (error) {
+                results.innerHTML = `<div class="status error">❌ Webcam error: ${error.message}</div>`;
+            }
+        }
+
+        // Test 4: YOLO Detection
+        async function testYOLO() {
+            const results = document.getElementById('yoloTest');
+            
+            if (!video || !video.srcObject) {
+                results.innerHTML = '<div class="status error">❌ Start webcam first!</div>';
+                return;
+            }
+            
+            results.innerHTML = '<div class="status info">Loading YOLO model...</div>';
+            
+            try {
+                if (!yoloSession) {
+                    yoloSession = await ort.InferenceSession.create('/models/yolov11n.onnx', {
+                        executionProviders: ['wasm'],
+                        graphOptimizationLevel: 'all'
+                    });
+                    results.innerHTML = '<div class="status success">✅ YOLO model loaded</div>';
+                    results.innerHTML += `<div class="status info">Inputs: ${yoloSession.inputNames.join(', ')}</div>`;
+                    results.innerHTML += `<div class="status info">Outputs: ${yoloSession.outputNames.join(', ')}</div>`;
+                }
+                
+                results.innerHTML += '<div class="status info">Running detection...</div>';
+                
+                // Preprocess frame
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 640;
+                tempCanvas.height = 640;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(video, 0, 0, 640, 640);
+                const imageData = tempCtx.getImageData(0, 0, 640, 640);
+                const pixels = imageData.data;
+                
+                const input = new Float32Array(3 * 640 * 640);
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const pixelIndex = i / 4;
+                    input[pixelIndex] = pixels[i] / 255.0;
+                    input[640 * 640 + pixelIndex] = pixels[i + 1] / 255.0;
+                    input[2 * 640 * 640 + pixelIndex] = pixels[i + 2] / 255.0;
+                }
+                
+                // Run inference
+                const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640]);
+                const feeds = { images: tensor };
+                const output = await yoloSession.run(feeds);
+                
+                results.innerHTML += '<div class="status success">✅ YOLO inference completed</div>';
+                results.innerHTML += `<div class="status info">Output shape: ${output[yoloSession.outputNames[0]].dims.join(' x ')}</div>`;
+                results.innerHTML += `<div class="status info">Output size: ${output[yoloSession.outputNames[0]].data.length}</div>`;
+                
+                // Check for person detection
+                // YOLOv11 output format: [1, 8400, 84] - each prediction is 84 consecutive values
+                const outputData = output[yoloSession.outputNames[0]].data;
+                let personFound = false;
+                let maxPersonConfidence = 0;
+                let personBbox = null;
+                
+                for (let i = 0; i < 8400; i++) {
+                    const offset = i * 84;
+                    const cx = outputData[offset + 0];
+                    const cy = outputData[offset + 1];
+                    const w = outputData[offset + 2];
+                    const h = outputData[offset + 3];
+                    const personScore = outputData[offset + 4]; // person is class 0
+                    
+                    if (personScore > 0.5) {
+                        personFound = true;
+                        if (personScore > maxPersonConfidence) {
+                            maxPersonConfidence = personScore;
+                            // Scale to video dimensions
+                            const scaleX = 640 / 640;
+                            const scaleY = 480 / 640;
+                            personBbox = {
+                                x: (cx - w / 2) * scaleX,
+                                y: (cy - h / 2) * scaleY,
+                                w: w * scaleX,
+                                h: h * scaleY
+                            };
+                        }
+                    }
+                }
+                
+                if (personFound && personBbox) {
+                    results.innerHTML += `<div class="status success">✅ Person detected! (${(maxPersonConfidence * 100).toFixed(0)}% confidence)</div>`;
+                    results.innerHTML += `<div class="status info">Bbox: (${personBbox.x.toFixed(0)}, ${personBbox.y.toFixed(0)}, ${personBbox.w.toFixed(0)}, ${personBbox.h.toFixed(0)})</div>`;
+                    
+                    // Draw bounding box using actual coordinates
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.strokeStyle = '#8B5CF6';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(personBbox.x, personBbox.y, personBbox.w, personBbox.h);
+                    
+                    // Draw label
+                    ctx.fillStyle = '#8B5CF6';
+                    ctx.fillRect(personBbox.x, personBbox.y - 25, 150, 25);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '14px Arial';
+                    ctx.fillText('Person Detected', personBbox.x + 5, personBbox.y - 7);
+                } else {
+                    results.innerHTML += '<div class="status warning">⚠️ No person detected (try better lighting or move closer)</div>';
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<div class="status error">❌ YOLO error: ${error.message}</div>`;
+                console.error('YOLO error:', error);
+            }
+        }
+
+        // Test 5: face-api.js Detection
+        async function testFaceAPI() {
+            const results = document.getElementById('faceapiTest');
+            
+            if (!video || !video.srcObject) {
+                results.innerHTML = '<div class="status error">❌ Start webcam first!</div>';
+                return;
+            }
+            
+            results.innerHTML = '<div class="status info">Loading face-api.js models...</div>';
+            
+            try {
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+                    faceapi.nets.faceExpressionNet.loadFromUri('/models')
+                ]);
+                
+                results.innerHTML = '<div class="status success">✅ face-api.js models loaded</div>';
+                results.innerHTML += '<div class="status info">Running detection...</div>';
+                
+                const detection = await faceapi
+                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceExpressions();
+                
+                if (detection) {
+                    const expressions = detection.expressions;
+                    const primaryExpression = Object.keys(expressions).reduce(
+                        (a, b) => expressions[a] > expressions[b] ? a : b
+                    );
+                    
+                    results.innerHTML += '<div class="status success">✅ Face detected!</div>';
+                    results.innerHTML += `<div class="status success">Expression: ${primaryExpression} (${(expressions[primaryExpression] * 100).toFixed(0)}%)</div>`;
+                    
+                    // Show all expressions
+                    results.innerHTML += '<div class="status info">All expressions:</div>';
+                    for (const [expr, score] of Object.entries(expressions)) {
+                        results.innerHTML += `<div class="status info">  ${expr}: ${(score * 100).toFixed(0)}%</div>`;
+                    }
+                } else {
+                    results.innerHTML += '<div class="status warning">⚠️ No face detected</div>';
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<div class="status error">❌ face-api.js error: ${error.message}</div>`;
+                if (error.message.includes('404') || error.message.includes('Failed to fetch')) {
+                    results.innerHTML += '<div class="status error">❌ face-api.js model files are MISSING!</div>';
+                    results.innerHTML += '<div class="status warning">⚠️ Models should be in public/models/ directory</div>';
+                }
+                console.error('face-api.js error:', error);
+            }
+        }
+
+        // Run tests on load
+        window.addEventListener('load', () => {
+            testLibraries();
+            testModels();
+        });
+    </script>
+</body>
+</html>

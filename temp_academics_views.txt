@@ -1,0 +1,476 @@
+from django.utils import timezone
+from rest_framework import viewsets, status
+from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import Assignment, Submission, PracticeQuestion, Course, Enrollment, Unit, GradeItem, Grade, TeacherCourseRequest, StudentEnrollmentRequest
+from .serializers import (
+    AssignmentSerializer, SubmissionSerializer, PracticeQuestionSerializer,
+    CourseSerializer, CourseWithGradesSerializer, GradeItemSerializer, GradeSerializer,
+    TeacherCourseRequestSerializer, StudentEnrollmentRequestSerializer
+)
+
+
+class TeacherCourseRequestViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing teacher course requests."""
+
+    serializer_class = TeacherCourseRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'Admin':
+            return TeacherCourseRequest.objects.all()
+        elif user.role == 'Teacher':
+            return TeacherCourseRequest.objects.filter(teacher=user)
+        return TeacherCourseRequest.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(teacher=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve a course request."""
+        if request.user.role != 'Admin':
+            return Response({'error': 'Only admins can approve requests'}, status=status.HTTP_403_FORBIDDEN)
+
+        course_request = self.get_object()
+        course_request.status = 'approved'
+        course_request.reviewed_by = request.user
+        course_request.reviewed_at = timezone.now()
+        course_request.review_notes = request.data.get('review_notes', '')
+        course_request.save()
+
+        serializer = self.get_serializer(course_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def decline(self, request, pk=None):
+        """Decline a course request."""
+        if request.user.role != 'Admin':
+            return Response({'error': 'Only admins can decline requests'}, status=status.HTTP_403_FORBIDDEN)
+
+        course_request = self.get_object()
+        course_request.status = 'declined'
+        course_request.reviewed_by = request.user
+        course_request.reviewed_at = timezone.now()
+        course_request.review_notes = request.data.get('review_notes', '')
+        course_request.save()
+
+        serializer = self.get_serializer(course_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def under_review(self, request, pk=None):
+        """Put a course request under review."""
+        if request.user.role != 'Admin':
+            return Response({'error': 'Only admins can set requests under review'}, status=status.HTTP_403_FORBIDDEN)
+
+        course_request = self.get_object()
+        course_request.status = 'under_review'
+        course_request.reviewed_by = request.user
+        course_request.reviewed_at = timezone.now()
+        course_request.review_notes = request.data.get('review_notes', '')
+        course_request.save()
+
+        serializer = self.get_serializer(course_request)
+        return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def available_courses_view(request):
+    """Get available courses for student enrollment."""
+    if request.user.role != 'Student':
+        return Response({'error': 'Only students can view available courses'}, status=status.HTTP_403_FORBIDDEN)
+
+    # Get approved teacher course requests
+    approved_requests = TeacherCourseRequest.objects.filter(status='approved')
+
+    courses = []
+    for req in approved_requests:
+        courses.append({
+            'id': req.id,
+            'subject': req.subject,
+            'grade_level': req.grade_level,
+            'stream': req.stream,
+            'teacher': {
+                'id': req.teacher.id,
+                'username': req.teacher.username,
+                'first_name': req.teacher.first_name,
+                'last_name': req.teacher.last_name
+            }
+        })
+
+    # Apply filters
+    grade_level = request.query_params.get('grade_level')
+    subject = request.query_params.get('subject')
+    teacher = request.query_params.get('teacher')
+    stream = request.query_params.get('stream')
+
+    if grade_level:
+        courses = [c for c in courses if c['grade_level'] == grade_level]
+    if subject:
+        courses = [c for c in courses if subject.lower() in c['subject'].lower()]
+    if teacher:
+        courses = [c for c in courses if teacher.lower() in f"{c['teacher']['first_name']} {c['teacher']['last_name']}".lower()]
+    if stream:
+        courses = [c for c in courses if c['stream'] and stream.lower() in c['stream'].lower()]
+
+    return Response(courses)
+
+
+class StudentEnrollmentRequestViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing student enrollment requests."""
+
+    serializer_class = StudentEnrollmentRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'Admin':
+            return StudentEnrollmentRequest.objects.all()
+        elif user.role == 'Teacher':
+            return StudentEnrollmentRequest.objects.filter(teacher=user)
+        elif user.role == 'Student':
+            return StudentEnrollmentRequest.objects.filter(student=user)
+        return StudentEnrollmentRequest.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(student=self.request.user, teacher_id=self.request.data.get('teacher'))
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve an enrollment request."""
+        enrollment_request = self.get_object()
+
+        # Only the assigned teacher can approve
+        if request.user != enrollment_request.teacher:
+            return Response({'error': 'Only the assigned teacher can approve enrollment requests'}, status=status.HTTP_403_FORBIDDEN)
+
+        enrollment_request.status = 'approved'
+        enrollment_request.reviewed_by = request.user
+        enrollment_request.reviewed_at = timezone.now()
+        enrollment_request.review_notes = request.data.get('review_notes', '')
+        enrollment_request.save()
+
+        # Get or create the course first
+        course, _ = Course.objects.get_or_create(
+            teacher=enrollment_request.teacher,
+            subject=enrollment_request.subject,
+            grade_level=enrollment_request.grade_level,
+            defaults={'title': f"{enrollment_request.subject} - Grade {enrollment_request.grade_level}"}
+        )
+        
+        # Create actual enrollment
+        Enrollment.objects.get_or_create(
+            student=enrollment_request.student,
+            course=course,
+            defaults={'enrolled_at': timezone.now()}
+        )
+
+        serializer = self.get_serializer(enrollment_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def decline(self, request, pk=None):
+        """Decline an enrollment request."""
+        enrollment_request = self.get_object()
+
+        if request.user != enrollment_request.teacher:
+            return Response({'error': 'Only the assigned teacher can decline enrollment requests'}, status=status.HTTP_403_FORBIDDEN)
+
+        enrollment_request.status = 'declined'
+        enrollment_request.reviewed_by = request.user
+        enrollment_request.reviewed_at = timezone.now()
+        enrollment_request.review_notes = request.data.get('review_notes', '')
+        enrollment_request.save()
+
+        serializer = self.get_serializer(enrollment_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def under_review(self, request, pk=None):
+        """Put an enrollment request under review."""
+        enrollment_request = self.get_object()
+
+        if request.user != enrollment_request.teacher:
+            return Response({'error': 'Only the assigned teacher can set enrollment requests under review'}, status=status.HTTP_403_FORBIDDEN)
+
+        enrollment_request.status = 'under_review'
+        enrollment_request.reviewed_by = request.user
+        enrollment_request.reviewed_at = timezone.now()
+        enrollment_request.review_notes = request.data.get('review_notes', '')
+        enrollment_request.save()
+
+        serializer = self.get_serializer(enrollment_request)
+        return Response(serializer.data)
+
+
+class AssignmentViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing assignments."""
+    
+    queryset = Assignment.objects.all()
+    serializer_class = AssignmentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter assignments by document type if provided."""
+        queryset = Assignment.objects.all()
+        document_type = self.request.query_params.get('document_type', None)
+        
+        if document_type:
+            queryset = queryset.filter(document_type=document_type)
+        
+        return queryset
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=True, methods=['get'])
+    def submissions(self, request, pk=None):
+        """Get all submissions for an assignment."""
+        assignment = self.get_object()
+        submissions = Submission.objects.filter(assignment=assignment)
+        serializer = SubmissionSerializer(submissions, many=True)
+        return Response(serializer.data)
+
+
+class SubmissionViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing submissions."""
+    
+    queryset = Submission.objects.all()
+    serializer_class = SubmissionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.role in ['Admin', 'Teacher']:
+            return Submission.objects.all()
+        return Submission.objects.filter(student=self.request.user)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_grades_view(request):
+    """Get grades for the current student including submitted assignments."""
+    
+    if request.user.role != 'Student':
+        return Response(
+            {'error': 'Only students can access this endpoint'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    from communications.models import StudentAssignment
+    from django.db.models import Avg, Count, Q
+    
+    # Get student's assignments
+    assignments = StudentAssignment.objects.filter(
+        student=request.user
+    ).select_related('teacher')
+    
+    # Group by subject and teacher
+    courses_dict = {}
+    
+    for assignment in assignments:
+        # Create course key
+        subject = assignment.subject or 'General'
+        teacher_name = assignment.teacher.username
+        course_key = f"{subject}_{assignment.teacher.id}"
+        
+        if course_key not in courses_dict:
+            courses_dict[course_key] = {
+                'id': course_key,
+                'title': f"{subject} - {assignment.grade_level or 'Grade'}",
+                'teacher_name': teacher_name,
+                'units': {},
+                'grades': []
+            }
+        
+        # Add to grades list
+        if assignment.is_graded and assignment.grade is not None:
+            courses_dict[course_key]['grades'].append(float(assignment.grade))
+            
+            # Create unit based on document type
+            unit_key = assignment.document_type
+            if unit_key not in courses_dict[course_key]['units']:
+                courses_dict[course_key]['units'][unit_key] = {
+                    'id': f"u_{course_key}_{unit_key}",
+                    'title': f"{assignment.document_type.replace('_', ' ').title()}s",
+                    'items': []
+                }
+            
+            # Add grade item
+            courses_dict[course_key]['units'][unit_key]['items'].append({
+                'id': assignment.id,
+                'title': assignment.assignment_topic,
+                'score': float(assignment.grade),
+                'max_score': 100,
+                'type': assignment.document_type.replace('_', ' ').title()
+            })
+    
+    # Calculate overall grades and unit grades
+    courses = []
+    for course_data in courses_dict.values():
+        if course_data['grades']:
+            course_data['overall_grade'] = sum(course_data['grades']) / len(course_data['grades'])
+        else:
+            course_data['overall_grade'] = 0
+        
+        # Convert units dict to list and calculate unit grades
+        units_list = []
+        for unit_data in course_data['units'].values():
+            if unit_data['items']:
+                unit_grades = [item['score'] for item in unit_data['items']]
+                unit_data['unit_grade'] = sum(unit_grades) / len(unit_grades)
+            else:
+                unit_data['unit_grade'] = 0
+            units_list.append(unit_data)
+        
+        course_data['units'] = units_list
+        del course_data['grades']  # Remove temporary grades list
+        courses.append(course_data)
+    
+    return Response(courses)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def child_summary_view(request, child_id):
+    """Get summary for a specific child (for parents)."""
+    
+    if request.user.role != 'Parent':
+        return Response(
+            {'error': 'Only parents can access this endpoint'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Mock data
+    summary = {
+        'id': child_id,
+        'name': 'Student Name',
+        'grade': 'Grade 10',
+        'overall_progress': 85.0,
+        'upcoming_assignments': [],
+        'recent_alerts_count': 0,
+    }
+    
+    return Response(summary)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def parent_linked_students_view(request):
+    """Get students linked to the current parent."""
+    if request.user.role != 'Parent':
+        return Response(
+            {'error': 'Only parents can access this endpoint'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    children = request.user.children.filter(is_active=True)
+    from users.serializers import UserSerializer
+    serializer = UserSerializer(children, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def parent_child_grades_view(request):
+    """Get grades for all children of the current parent."""
+    if request.user.role != 'Parent':
+        return Response(
+            {'error': 'Only parents can access this endpoint'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    children = request.user.children.filter(is_active=True)
+    children_grades = []
+
+    from communications.models import StudentAssignment
+
+    for child in children:
+        # Get child's assignments similar to my_grades_view
+        assignments = StudentAssignment.objects.filter(
+            student=child
+        ).select_related('teacher')
+
+        # Group by subject and teacher
+        courses_dict = {}
+
+        for assignment in assignments:
+            subject = assignment.subject or 'General'
+            teacher_name = assignment.teacher.username
+            course_key = f"{subject}_{assignment.teacher.id}"
+
+            if course_key not in courses_dict:
+                courses_dict[course_key] = {
+                    'id': course_key,
+                    'title': f"{subject} - {assignment.grade_level or 'Grade'}",
+                    'teacher_name': teacher_name,
+                    'units': {},
+                    'grades': []
+                }
+
+            if assignment.is_graded and assignment.grade is not None:
+                courses_dict[course_key]['grades'].append(float(assignment.grade))
+
+                unit_key = assignment.document_type
+                if unit_key not in courses_dict[course_key]['units']:
+                    courses_dict[course_key]['units'][unit_key] = {
+                        'id': f"u_{course_key}_{unit_key}",
+                        'title': f"{assignment.document_type.replace('_', ' ').title()}s",
+                        'items': []
+                    }
+
+                courses_dict[course_key]['units'][unit_key]['items'].append({
+                    'id': assignment.id,
+                    'title': assignment.assignment_topic,
+                    'score': float(assignment.grade),
+                    'max_score': 100,
+                    'type': assignment.document_type.replace('_', ' ').title()
+                })
+
+        # Calculate overall grades
+        courses = []
+        for course_data in courses_dict.values():
+            if course_data['grades']:
+                course_data['overall_grade'] = sum(course_data['grades']) / len(course_data['grades'])
+            else:
+                course_data['overall_grade'] = 0
+
+            units_list = []
+            for unit_data in course_data['units'].values():
+                if unit_data['items']:
+                    unit_grades = [item['score'] for item in unit_data['items']]
+                    unit_data['unit_grade'] = sum(unit_grades) / len(unit_grades)
+                else:
+                    unit_data['unit_grade'] = 0
+                units_list.append(unit_data)
+
+            course_data['units'] = units_list
+            del course_data['grades']
+            courses.append(course_data)
+
+        children_grades.append({
+            'child': {
+                'id': child.id,
+                'username': child.username,
+                'first_name': child.first_name,
+                'last_name': child.last_name,
+                'grade_level': child.grade_level
+            },
+            'courses': courses
+        })
+
+    return Response(children_grades)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def practice_questions_view(request):
+    """Get practice questions filtered by subject."""
+    
+    subject = request.query_params.get('subject', '')
+    questions = PracticeQuestion.objects.filter(subject__icontains=subject)
+    serializer = PracticeQuestionSerializer(questions, many=True)
+    return Response(serializer.data)

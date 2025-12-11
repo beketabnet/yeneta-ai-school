@@ -1,0 +1,59 @@
+--- Debugging RAG Content for Grade 7 English ---
+
+1. Searching for 'Road Safety'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: The problem may grow further in the coming decades due to the rapid rise of vehicle ownership 
+assoc...
+  Result 2: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+38
+ROAD SAFETY
+evidence as to their effectiveness in reducing crashes, ...
+  Result 3: Chapter ? - English grade 7.pdf
+  Snippet: while behind the wheel, driving without using a seat belt and not using a motorcycle helmet) 
+and th...
+  Result 4: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+34
+ROAD SAFETY
+Nuhamin: Yes, it also makes many children orphans and ma...
+  Result 5: Chapter ? - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+37
+ROAD SAFETY
+1. Look at the picture below. What is happening in the p...
+
+2. Searching for 'Talking about Preferences'...
+  Result 1: Chapter ? - English grade 7.pdf
+  Snippet: Kebede: Thank you!
+Activity 1.6: Discuss in groups why people prefer or do not prefer to live in the...
+  Result 2: Chapter 14 - English grade 7.pdf
+  Snippet: suggest someone I know. I eat all kinds of vegetarian and non-vegetarian food because I am a very 
+f...
+  Result 3: Chapter ? - English grade 7.pdf
+  Snippet: D)  I need a few items at the store. Clothespins, a bottle opener and napkins.
+4. A)       The party...
+  Result 4: Chapter 2 - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+123
+SELF-EXPRESSIONS
+LESSON 2
+Post-listening
+Activity 9.4: Answer the f...
+  Result 5: Chapter 12 - English grade 7.pdf
+  Snippet: English Grade 7 Student Book
+132
+SELF-EXPRESSIONS
+Activity 9.17: Write a paragraph that describes on...
+
+3. Checking Unit 3 Content explicitly...
+OpenAI API key not found
+  [FOUND] Unit 3 found. Title: Chapter 3
+  Content Start: 3. How serious is a road accident in your village or city?
+SECTION TWO: SPEAKING
+LESSON 3
+Activity 3.5. Read the dialogues below and practice them in pairs. 
+Dialogue 1
+Ruhama: Good morning.
+Nuhamin: ...
+  Metadata: {'created_at': '2025-11-08T05:29:23.956541+00:00', 'grade': 'Grade 7', 'stream': 'N/A', 'chapter': '3', 'file_name': '88e5480a-912a-478d-89da-24587902f836.pdf', 'subject': 'English', 'chapter_raw': 'LESSON 3', 'configured_chapter': '3'}
