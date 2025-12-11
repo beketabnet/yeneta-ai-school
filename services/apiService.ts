@@ -2,7 +2,7 @@ import axios from 'axios';
 // FIX: Imported GeneratedRubric to resolve type error.
 import { AIInsight, AuthenticatedUser, ChildSummary, LessonPlan, SavedLessonPlan, StudentProgress, User, UserRole, VectorStore, ExamVectorStore, Assignment, Submission, GradedSubmission, AuthenticityResult, Course, PracticeQuestion, PracticeFeedback, Conversation, Message, EngagementTrendPoint, LearningOutcomePoint, GeneratedRubric, SmartAlert, SavedRubric, RubricGenerationParams, MasterCourse, UserDocument } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api/';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const api = axios.create({
     baseURL: API_BASE_URL,
