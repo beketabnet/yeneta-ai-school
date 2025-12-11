@@ -85,3 +85,4 @@ unstructured>=0.11.0
 # Monitoring & Logging
 # --------------------------------------------
 colorlog>=6.8.0
+gunicorn
